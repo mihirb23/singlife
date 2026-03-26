@@ -356,8 +356,10 @@ async function sendMessage(text) {
       }
     }
     bodyEl.innerHTML = marked.parse(fullText || '*(no response)*');
+    if (!fullText) fullText = '*(no response)*';
   } catch (err) {
-    bodyEl.innerHTML = marked.parse(`**Error:** ${err.message}`);
+    fullText = `**Error:** ${err.message}`;
+    bodyEl.innerHTML = marked.parse(fullText);
   }
 
   conv.messages.push({ role: 'assistant', content: fullText });

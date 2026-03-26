@@ -138,7 +138,9 @@ def upload_document():
 
 @app.route('/api/documents/<filename>', methods=['DELETE'])
 def delete_document(filename):
-    file_path = KB_DIR / filename
+    file_path = (KB_DIR / filename).resolve()
+    if not str(file_path).startswith(str(KB_DIR.resolve())):
+        return jsonify({'error': 'Invalid filename'}), 400
     if not file_path.exists():
         return jsonify({'error': 'Document not found'}), 404
 
