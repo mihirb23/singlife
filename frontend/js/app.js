@@ -372,6 +372,8 @@ async function sendMessage(text) {
       throw new Error(err.error || `HTTP ${resp.status}`);
     }
 
+    if (!resp.body) throw new Error('No response body');
+
     // read the SSE stream
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -399,11 +401,11 @@ async function sendMessage(text) {
         } catch {}
       }
     }
-    bodyEl.innerHTML = marked.parse(fullText || '*(no response)*');
+    if (bodyEl) bodyEl.innerHTML = marked.parse(fullText || '*(no response)*');
     if (!fullText) fullText = '*(no response)*';
   } catch (err) {
     fullText = `**Error:** ${err.message}`;
-    bodyEl.innerHTML = marked.parse(fullText);
+    if (bodyEl) bodyEl.innerHTML = marked.parse(fullText);
   }
 
   conv.messages.push({ role: 'assistant', content: fullText });

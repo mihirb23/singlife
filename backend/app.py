@@ -203,7 +203,7 @@ def delete_document(filename):
 
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5001))
+    port = int(os.getenv('PORT', 5003))
     debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     logger.info(f"Starting Singlife AI Assistant on port {port}")
     app.run(host='0.0.0.0', port=port, debug=debug)
