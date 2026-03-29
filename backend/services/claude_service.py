@@ -1,15 +1,13 @@
-"""
-Singlife AI Assistant — Insurance Knowledge Engine
-Claude-powered intelligent assistant grounded in uploaded documents.
-
-Knowledge base is loaded dynamically from the knowledge_base/ directory at the
-project root. Documents can be uploaded via the UI or dropped as .txt files.
-"""
+# claude_service.py
+# handles all the LLM interaction — loading knowledge base docs,
+# building the system prompt, streaming responses, and logging Q&A
 
 import os
+import json
 import logging
 from pathlib import Path
 from typing import Iterator, List, Dict
+from datetime import datetime
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -18,18 +16,14 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=True)
 
 logger = logging.getLogger(__name__)
 
-# ─── Knowledge base loader ────────────────────────────────────────────────────
-
-# knowledge_base/ lives two levels up from here (backend/services/ → root)
+# paths relative to project root (this file is in backend/services/)
 KB_DIR = Path(__file__).parent.parent.parent / 'knowledge_base'
+LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 
 def load_knowledge_base() -> tuple[str, List[Dict]]:
-    """
-    Load every .txt file in knowledge_base/ and combine them into one
-    knowledge string that is injected into the Claude system prompt.
-    Returns (combined_text, list_of_doc_info).
-    """
+    """reads all .txt files from knowledge_base/ and combines them into
+    one big string that gets injected into the system prompt"""
     KB_DIR.mkdir(exist_ok=True)
 
     files = sorted(KB_DIR.glob('*.txt'))
@@ -66,26 +60,75 @@ def load_knowledge_base() -> tuple[str, List[Dict]]:
 
 
 def build_system_prompt(knowledge_base: str) -> str:
-    return f"""You are the **Singlife AI Assistant** — an intelligent document analysis engine designed for insurance professionals (underwriters, claims adjusters, brokers, and agents).
+    """builds the full system prompt — this is where we define how the AI
+    should behave for SOP evaluation vs general Q&A vs knowledge gap detection"""
+    return f"""You are the **Singlife AI Operations Assistant** — an intelligent operations copilot for insurance professionals.
 
-## Your Role
-You serve as an intelligent copilot grounded exclusively in the documents loaded into your knowledge base. You help with:
-- **Policy coverage interpretation** — precise answers with specific section references
-- **Claims adjudication support** — what is and isn't covered, claims procedures, required documentation
-- **Exclusion analysis** — proactively surfacing relevant exclusions for any coverage question
-- **Regulatory compliance guidance** — jurisdiction-specific requirements
-- **Underwriting intelligence** — sub-limits, waiting periods, eligibility requirements, under-insurance calculations
-- **General document Q&A** — answering any question grounded in the uploaded documents
+## Your Capabilities
 
-## Response Guidelines
-1. **Always cite specific sections** from the documents — professionals need precise references.
-2. **State exact amounts** as documented (e.g., S$ for Singapore policies).
-3. **Proactively flag exclusions** even when the primary question is about coverage.
-4. **Never invent or extrapolate** — only state what is documented in the knowledge base below. If something is not documented, say so explicitly.
-5. **Be precise about conditions** — waiting periods, occupancy rules, notification deadlines, etc.
-6. **When multiple documents are loaded**, clarify which document your answer refers to.
-7. **For ambiguous situations**, acknowledge the ambiguity and recommend consulting the relevant authority directly.
-8. Use **structured formatting** — bold, bullet points, and clear headers for scannability.
+### Mode 1: SOP Case Evaluation
+When given case data (policy number, client fields, L400 data, follow-up codes, underwriting indicators), you MUST:
+1. Identify the applicable SOP (e.g., SOP-NBIG-STP-001 for New Business pre-issue checks)
+2. Determine the submission channel (QnB, EzSub, or Hardcopy) from the data
+3. Evaluate the case against EACH applicable SOP step
+4. Show Pass / Fail / Manual Review / Not Applicable for each step
+5. Derive the overall decision based on SOP outcomes
+6. Output in this EXACT format:
+
+**1. SOP Rule Evaluation**
+For each applicable step, show:
+- Step ID and description
+- Data compared (what was checked)
+- Result: Pass / Fail / Manual Review / N/A
+- Reason (brief)
+
+**2. Overall Decision**
+One of: Standard | Standard with Further Requirements | Refer to UW | Trigger GNS Review | Trigger Compliance | Withdrawal
+
+**3. Ops Outcome**
+What should happen next — clear, actionable instruction.
+
+**4. Automation Trigger**
+Yes or No
+
+**5. Automation Input**
+If Yes, output structured JSON:
+```json
+{{
+  "policyNumber": "...",
+  "decision": "...",
+  "outstandingItems": [],
+  "sopStepsFailed": [],
+  "recommendedAction": "..."
+}}
+```
+
+### Mode 2: General Q&A
+When asked questions about SOPs, policies, or processes:
+- Use ONLY content from the knowledge base below
+- Always cite the specific SOP step, section, or document
+- Follow format: Summary → Steps → Exceptions → References
+- If the answer is not in the knowledge base, say so explicitly — do NOT guess
+- If the question is ambiguous, ask clarifying questions
+
+### Mode 3: Knowledge Gap Detection
+When you cannot answer confidently or find missing/unclear rules:
+- Clearly state what information is missing
+- Reference the SOP step where the gap exists
+- Suggest what clarification is needed
+- Format as:
+  * **Question:** (what was asked)
+  * **SOP Reference:** (which step)
+  * **Gap:** (what's missing)
+  * **Suggested Clarification:** (what to ask the SME)
+
+## Critical Rules
+- **NEVER guess or use external knowledge** — only use the loaded documents
+- **NEVER autonomously fix data** — flag mismatches, recommend actions, but humans decide
+- **Always explain your reasoning** — show which SOP rule led to which conclusion
+- **Use plan codes (e.g., EYA, EYB) not plan names** — codes are stable, names vary
+- **Follow-up codes are key signals** — CSL, F45, C09, AT3 etc. determine next steps
+- **Critical fields require human verification** — DOB, Gender, NRIC, Nationality mismatches must be flagged, not resolved by AI
 
 ---
 
@@ -95,14 +138,35 @@ You serve as an intelligent copilot grounded exclusively in the documents loaded
 """
 
 
-# ─── Assistant ────────────────────────────────────────────────────────────────
+def log_qa(question: str, response: str, mode: str = 'chat'):
+    """appends each Q&A pair to a jsonl file so we can review
+    what questions are being asked and spot knowledge gaps"""
+    LOG_DIR.mkdir(exist_ok=True)
+    log_file = LOG_DIR / 'qa_log.jsonl'
+
+    entry = {
+        'timestamp': datetime.now().isoformat(),
+        'mode': mode,
+        'question': question[:500],
+        'response_preview': response[:300],
+        'response_length': len(response),
+    }
+
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry) + '\n')
+    except Exception as e:
+        logger.error(f"Failed to log Q&A: {e}")
+
 
 class InsuranceAssistant:
-    """Singlife AI Assistant powered by Claude."""
+    """main class — wraps the anthropic client, manages the knowledge base,
+    and handles streaming chat + case evaluation"""
 
     def __init__(self):
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
-        self.model = 'claude-sonnet-4-6'
+        self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-6')
+        self.max_tokens = int(os.getenv('CLAUDE_MAX_TOKENS', '4096'))
         self.knowledge_base, self.documents = load_knowledge_base()
         self.system_prompt = build_system_prompt(self.knowledge_base)
 
@@ -124,7 +188,7 @@ class InsuranceAssistant:
                 self.client = None
 
     def reload_knowledge_base(self):
-        """Reload all documents from knowledge_base/ directory."""
+        """called after uploading/deleting docs so the prompt stays in sync"""
         self.knowledge_base, self.documents = load_knowledge_base()
         self.system_prompt = build_system_prompt(self.knowledge_base)
         logger.info("Knowledge base reloaded")
@@ -132,11 +196,9 @@ class InsuranceAssistant:
     def is_available(self) -> bool:
         return self.client is not None
 
-    def chat_stream(self, messages: list) -> Iterator[str]:
-        """
-        Stream a response from Claude given conversation history.
-        messages: list of {"role": "user"|"assistant", "content": "..."}
-        """
+    def chat_stream(self, messages: list, mode: str = 'chat') -> Iterator[str]:
+        """streams claude's response chunk by chunk (used for both chat and evaluate).
+        also logs the full Q&A after the stream finishes."""
         if not self.client:
             yield (
                 "**Configuration Error:** `ANTHROPIC_API_KEY` is not set or invalid. "
@@ -146,14 +208,43 @@ class InsuranceAssistant:
             return
 
         try:
+            full_response = ''
             with self.client.messages.stream(
                 model=self.model,
-                max_tokens=2048,
+                max_tokens=self.max_tokens,
                 system=self.system_prompt,
                 messages=messages,
             ) as stream:
                 for text in stream.text_stream:
+                    full_response += text
                     yield text
+
+            # grab the last user message for logging
+            user_msg = ''
+            for m in reversed(messages):
+                if m.get('role') == 'user':
+                    user_msg = m.get('content', '')
+                    break
+            log_qa(user_msg, full_response, mode)
+
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error communicating with Claude API:** {str(e)}"
+
+    def get_qa_logs(self, limit: int = 50) -> List[Dict]:
+        """reads the jsonl log file and returns the last N entries"""
+        log_file = LOG_DIR / 'qa_log.jsonl'
+        if not log_file.exists():
+            return []
+
+        entries = []
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        entries.append(json.loads(line))
+        except Exception as e:
+            logger.error(f"Failed to read Q&A logs: {e}")
+
+        return entries[-limit:]

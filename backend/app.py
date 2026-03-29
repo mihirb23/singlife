@@ -1,7 +1,5 @@
-"""
-Singlife Platform — AI Assistant Backend
-Flask server for the Document Intelligence Engine
-"""
+# Flask backend for the Singlife AI Ops assistant
+# Handles API routes, file uploads, and streaming responses
 
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
@@ -24,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50mb upload limit
 
 assistant = InsuranceAssistant()
 
@@ -36,6 +34,7 @@ def index():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    """streams ai response back to the frontend using SSE"""
     data = request.get_json(silent=True)
     if not data or 'messages' not in data:
         return jsonify({'error': 'Request body must include a "messages" array'}), 400
@@ -44,8 +43,10 @@ def chat():
     if not isinstance(messages, list) or len(messages) == 0:
         return jsonify({'error': 'messages must be a non-empty array'}), 400
 
+    mode = data.get('mode', 'chat')
+
     def generate():
-        for chunk in assistant.chat_stream(messages):
+        for chunk in assistant.chat_stream(messages, mode=mode):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -65,7 +66,7 @@ def status():
     return jsonify({
         'status': 'online',
         'platform': 'Singlife',
-        'feature': 'AI Assistant — Document Intelligence Engine',
+        'feature': 'AI Operations Assistant — SOP Decisioning & Document Intelligence',
         'ai_available': assistant.is_available(),
         'model': assistant.model if assistant.is_available() else None,
         'documents': assistant.documents,
@@ -79,6 +80,7 @@ def list_documents():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_document():
+    """handles pdf/txt uploads, extracts text, saves to knowledge_base/"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
@@ -112,7 +114,7 @@ def upload_document():
     else:
         return jsonify({'error': 'Unsupported file type. Upload a .pdf or .txt file.'}), 400
 
-    # Save to knowledge_base/
+    # slugify filename and save
     KB_DIR.mkdir(exist_ok=True)
     slug = re.sub(r'[^a-z0-9]+', '_', Path(filename).stem.lower()).strip('_')
     out_path = KB_DIR / f"{slug}.txt"
@@ -125,7 +127,6 @@ def upload_document():
     out_path.write_text(header + text, encoding='utf-8')
     logger.info(f"Document uploaded: {filename} → {out_path.name} ({len(text):,} chars)")
 
-    # Reload knowledge base
     assistant.reload_knowledge_base()
 
     return jsonify({
@@ -136,8 +137,55 @@ def upload_document():
     })
 
 
+@app.route('/api/evaluate', methods=['POST'])
+def evaluate_case():
+    """takes case data json, builds an eval prompt, and streams the SOP check result"""
+    data = request.get_json(silent=True)
+    if not data or 'caseData' not in data:
+        return jsonify({'error': 'Request body must include "caseData"'}), 400
+
+    case_data = data['caseData']
+
+    # construct the prompt that tells the LLM to run through every SOP step
+    eval_prompt = (
+        "Evaluate the following case against SOP-NBIG-STP-001 (New Business Pre-Issue Checks & Decisioning). "
+        "Go through EVERY applicable step in the SOP checklist. "
+        "Show Pass / Fail / Manual Review / N/A for each step with reasoning.\n\n"
+        f"**Case Data:**\n```\n{json.dumps(case_data, indent=2) if isinstance(case_data, dict) else str(case_data)}\n```\n\n"
+        "Provide the full evaluation in the required 5-part format: "
+        "1) SOP Rule Evaluation, 2) Overall Decision, 3) Ops Outcome, 4) Automation Trigger, 5) Automation Input JSON."
+    )
+
+    messages = data.get('messages', [])
+    messages.append({'role': 'user', 'content': eval_prompt})
+
+    def generate():
+        for chunk in assistant.chat_stream(messages, mode='evaluate'):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+        }
+    )
+
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """returns recent Q&A logs — used for the learning loop / gap analysis"""
+    limit = request.args.get('limit', 50, type=int)
+    logs = assistant.get_qa_logs(limit=limit)
+    return jsonify({'logs': logs, 'total': len(logs)})
+
+
 @app.route('/api/documents/<filename>', methods=['DELETE'])
 def delete_document(filename):
+    # prevent path traversal by resolving and checking prefix
     file_path = (KB_DIR / filename).resolve()
     if not str(file_path).startswith(str(KB_DIR.resolve())):
         return jsonify({'error': 'Invalid filename'}), 400

@@ -1,17 +1,15 @@
-/**
- * Singlife AI Assistant
- */
+// app.js — frontend logic for the Singlife AI Ops assistant
+// handles chat UI, streaming responses, mode switching, doc uploads
 
 const API_BASE = '';
 
-// ─── State ───────────────────────────────────────────────────────────────────
-
+// state
 let conversations = JSON.parse(localStorage.getItem('sl_convos') || '[]');
 let activeId = null;
 let isStreaming = false;
+let currentMode = 'chat'; // 'chat' or 'evaluate'
 
-// ─── DOM ──────────────────────────────────────────────────────────────────────
-
+// grab all the dom elements we need
 const chatContainer  = document.getElementById('chatContainer');
 const messagesEl     = document.getElementById('messages');
 const welcomeEl      = document.getElementById('welcome');
@@ -35,12 +33,38 @@ const statusDotEl    = document.getElementById('sidebarStatus');
 const statusTextEl   = document.getElementById('sidebarStatusText');
 const welcomeUploadEl = document.getElementById('welcomeUploadBtn');
 const chatUploadEl   = document.getElementById('chatUploadBtn');
+const modeChatBtn    = document.getElementById('modeChatBtn');
+const modeEvalBtn    = document.getElementById('modeEvalBtn');
+const modeLabelEl    = document.getElementById('modeLabel');
+const chatModeLabelEl = document.getElementById('chatModeLabel');
 
-// ─── Marked ───────────────────────────────────────────────────────────────────
-
+// markdown renderer config
 marked.setOptions({ breaks: true, gfm: true });
 
-// ─── Sidebar toggle ──────────────────────────────────────────────────────────
+// -- mode toggle (chat vs evaluate) --
+
+function setMode(mode) {
+  currentMode = mode;
+  modeChatBtn.classList.toggle('active', mode === 'chat');
+  modeEvalBtn.classList.toggle('active', mode === 'evaluate');
+
+  const label = mode === 'chat' ? 'Chat' : 'Evaluate';
+  modeLabelEl.textContent = label;
+  chatModeLabelEl.textContent = label;
+
+  if (mode === 'chat') {
+    userInputEl.placeholder = 'Ask about SOPs, policies, or processes...';
+    chatInputEl.placeholder = 'Ask anything...';
+  } else {
+    userInputEl.placeholder = 'Paste case data (JSON or text) to evaluate against SOP...';
+    chatInputEl.placeholder = 'Paste case data or ask about a specific policy...';
+  }
+}
+
+modeChatBtn.addEventListener('click', () => setMode('chat'));
+modeEvalBtn.addEventListener('click', () => setMode('evaluate'));
+
+// -- sidebar --
 
 function setSidebar(open) {
   if (open) {
@@ -55,7 +79,7 @@ function setSidebar(open) {
 sidebarOpenEl.addEventListener('click', () => setSidebar(true));
 sidebarCloseEl.addEventListener('click', () => setSidebar(false));
 
-// ─── Status ───────────────────────────────────────────────────────────────────
+// -- status check --
 
 async function checkStatus() {
   try {
@@ -75,7 +99,7 @@ async function checkStatus() {
   }
 }
 
-// ─── Documents ────────────────────────────────────────────────────────────────
+// -- document list + upload --
 
 function renderDocumentList(documents) {
   docListEl.innerHTML = '';
@@ -99,6 +123,7 @@ function renderDocumentList(documents) {
     docListEl.appendChild(el);
   });
 
+  // wire up delete buttons
   docListEl.querySelectorAll('.doc-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -114,7 +139,7 @@ function renderDocumentList(documents) {
   const n = documents.length;
   docCountEl.textContent = n === 0 ? 'No documents' : `${n} doc${n > 1 ? 's' : ''} loaded`;
   inputNoteEl.textContent = n === 0
-    ? 'Upload documents to get started'
+    ? 'Upload SOPs and documents to get started'
     : `Grounded in ${n} document${n > 1 ? 's' : ''}`;
 }
 
@@ -128,7 +153,7 @@ async function uploadFile(file) {
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Upload failed'); return; }
     if (data.documents) renderDocumentList(data.documents);
-    setSidebar(true); // show sidebar to see uploaded doc
+    setSidebar(true);
   } catch (err) { alert('Upload failed: ' + err.message); }
   finally {
     uploadBtnEl.disabled = false;
@@ -150,7 +175,7 @@ fileInputEl.addEventListener('change', () => {
   if (fileInputEl.files.length > 0) { uploadFile(fileInputEl.files[0]); fileInputEl.value = ''; }
 });
 
-// ─── Conversations ────────────────────────────────────────────────────────────
+// -- conversation management (stored in localStorage) --
 
 function save() { localStorage.setItem('sl_convos', JSON.stringify(conversations)); }
 function getActive() { return conversations.find(c => c.id === activeId) || null; }
@@ -225,7 +250,7 @@ function updateTitle(id, msg) {
   if (c) { c.title = msg.length > 44 ? msg.slice(0, 44) + '\u2026' : msg; save(); renderConvList(); }
 }
 
-// ─── Welcome / Chat mode ──────────────────────────────────────────────────────
+// -- welcome screen vs chat view --
 
 function showWelcome() {
   welcomeEl.style.display = 'flex';
@@ -238,7 +263,7 @@ function hideWelcome() {
   chatInputEl.focus();
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+// -- message rendering --
 
 function renderMessages(msgs) {
   messagesEl.innerHTML = '';
@@ -259,11 +284,12 @@ function appendMessage(role, content, streaming = false) {
     return null;
   }
 
+  // assistant message with avatar
   const hdr = document.createElement('div');
   hdr.className = 'msg-header';
   hdr.innerHTML = `
     <div class="msg-avatar">S</div>
-    <span class="msg-sender">Singlife</span>
+    <span class="msg-sender">Singlife AI Ops</span>
   `;
 
   const body = document.createElement('div');
@@ -284,7 +310,7 @@ function appendMessage(role, content, streaming = false) {
   return streaming ? body : null;
 }
 
-// ─── Send ─────────────────────────────────────────────────────────────────────
+// -- send message (handles both chat and evaluate modes) --
 
 async function sendMessage(text) {
   if (isStreaming || !text.trim()) return;
@@ -303,6 +329,7 @@ async function sendMessage(text) {
   appendMessage('user', userText);
   scrollToBottom();
 
+  // clear inputs and disable while streaming
   userInputEl.value = '';
   chatInputEl.value = '';
   autoResize(userInputEl);
@@ -318,10 +345,26 @@ async function sendMessage(text) {
   let first = true;
 
   try {
-    const resp = await fetch(`${API_BASE}/api/chat`, {
+    // pick endpoint based on current mode
+    let endpoint = `${API_BASE}/api/chat`;
+    let payload = { messages: conv.messages, mode: currentMode };
+
+    // in evaluate mode, try parsing input as json for the case data
+    if (currentMode === 'evaluate') {
+      let caseData = userText;
+      try {
+        caseData = JSON.parse(userText);
+      } catch {
+        // not json, just send as plain text
+      }
+      endpoint = `${API_BASE}/api/evaluate`;
+      payload = { caseData, messages: conv.messages.slice(0, -1) };
+    }
+
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: conv.messages }),
+      body: JSON.stringify(payload),
     });
 
     if (!resp.ok) {
@@ -329,6 +372,7 @@ async function sendMessage(text) {
       throw new Error(err.error || `HTTP ${resp.status}`);
     }
 
+    // read the SSE stream
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -369,7 +413,7 @@ async function sendMessage(text) {
   chatInputEl.focus();
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// -- helpers --
 
 function autoResize(el) {
   el.style.height = 'auto';
@@ -380,7 +424,7 @@ function scrollToBottom() {
   requestAnimationFrame(() => { chatContainer.scrollTop = chatContainer.scrollHeight; });
 }
 
-// ─── Events ───────────────────────────────────────────────────────────────────
+// -- event listeners --
 
 userInputEl.addEventListener('input', () => {
   autoResize(userInputEl);
@@ -402,12 +446,10 @@ chatSendBtnEl.addEventListener('click', () => sendMessage(chatInputEl.value));
 
 newChatBtnEl.addEventListener('click', () => newConversation());
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// -- init --
 
 (function init() {
   checkStatus();
-
-  // Start with sidebar collapsed
   setSidebar(false);
 
   if (conversations.length === 0) {

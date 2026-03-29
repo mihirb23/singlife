@@ -1,0 +1,306 @@
+# SOP-NBIG-STP-001: New Business Pre-Issue Checks & Decisioning
+
+## Purpose
+Provide a clear, step-by-step checklist and decision rules for New Business pre-issue checks (identity, client, contract, follow-ups, Jet underwriting) and derive a recommended case outcome. Designed to be AI-readable for rule-by-rule reasoning.
+
+## Scope
+Applies to New Business processing scenarios across channels: QnB, EzSub, and Hardcopy. Covers document checks, L400 validations, follow-up code checks, Jet underwriting checks, and decision routing.
+
+## Definitions
+- FileNet: Document repository for identity and core documents
+- DotSphere: Application / workflow interface
+- L400: Policy administration system used for client/contract validations
+- RCS: Claims system used for claim/ICD checks (when required)
+- MyInfo: Digital identity submission; consent form timestamp must be valid within 1 year
+- FUP: Follow-up codes on Proposal Follow-ups screen
+- Jet underwriting: Fast checks using Client Underwriting Inquiries indicators
+- STP: Straight-through processing (no underwriter review)
+- ANB: Age Next Birthday
+- SA: Sum Assured
+- NRIC: National Registration Identity Card
+- GNS: Government Name Screening
+
+## How to Use
+1) Follow the step list in order.
+2) For each step with scenarios, record outcome as Pass / Fail / Manual Review / Pending.
+3) Use the Decision Outcomes section to derive the final recommendation.
+4) If information is missing or ambiguous, log it in the Knowledge Gap / Ambiguity Log.
+
+────────────────────────────────────────────────────────────────────────────────
+
+## STEPS & RULES CHECKLIST
+
+### Category 1: Open Documents
+
+Step 1A — Open Identity Document on FileNet
+- Purpose: Ensure that MyInfo documents are submitted.
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+Step 1B — Open Benefit Illustration on FileNet
+- Purpose: Ensure that core documents are submitted.
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+Step 1C — Open Application Form on DotSphere
+- Purpose: Tally client and contract information against L400.
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+### Category 2: Document Checks
+
+Step 2A — Check MyInfo Consent Form Timestamp
+- Data Source: FileNet
+- Scenario VALID: Timestamp is within 1-year validity → Pass
+- Scenario NOT VALID: Treat as outstanding requirement / exception → Fail
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+### Category 3: Client Number Search
+
+Step 3A — Search client on L400 using NRIC/License + NoteLog comment
+- Data Source: L400
+- Scenario 1 RESULT FOUND: Correct client number confirmed → Pass
+- Scenario >1 RESULTS or NONE: Flag issue; manual review to resolve correct client record → Manual Review
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+### Category 4: Duplicate Client Checks
+
+Step 4A — Search client on L400 using Surname + Given Name
+- Data Source: L400
+- Purpose: Check for duplicate client ID (e.g., client may have FIN number in the past).
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 4B — Check Birth Date and Sex in L400 vs Application Form
+- Data Source: L400
+- Scenario MATCH FOUND: Confirm same client (name is not unique) → Pass
+- Scenario NO MATCH: Manual review; do not proceed as same client → Manual Review
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 4C — Client patching (merge/void duplicates)
+- Data Source: L400
+- Purpose: Merge/void duplicate client IDs.
+- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+
+### Category 5: Client Information Checks
+
+Step 5A — Check if client name sequence on L400 matches MyInfo Consent Form
+- Data Source: L400
+- Scenario MATCH: Pass
+- Scenario MISMATCH: Fix client name sequence → Manual Review
+
+Step 5B — Update Race from OTH to correct value on L400
+- Data Source: L400
+- Purpose: Update race field if incorrect.
+
+Step 5C — Check key fields in L400 vs Application Form
+- Data Source: L400
+- Fields to check:
+  * Sex (Gender affects premium)
+  * Block/Street No, Street Name, Unit No, Postcode, Country (Address — PDPA compliance)
+  * SMS / Mobile number (PDPA compliance)
+  * Email Address (Client needs for MySinglife registration)
+  * Nationality (Compliance related)
+  * Identity No (Compliance related)
+  * Birth Date (ANB affects premium)
+- Scenario ALL MATCH: Pass
+- Scenario ANY MISMATCH: Update required; possible concurrent apps / manual entry errors → Fail (outstanding item)
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- IMPORTANT: Information may be wrong due to concurrent applications (e.g. EzSub application submitted after, fields may be keyed wrongly due to manual entry).
+
+Step 5D — Update incorrect fields on L400
+- Purpose: Correct any mismatched fields identified in Step 5C.
+
+### Category 6: Contract Information Checks
+
+Step 6A — Check Premium Amount on L400 vs Annual Premium on Application Form
+- Data Source: L400
+- Scenario MATCH: Ensure premium amount is correct → Pass
+- Scenario MISMATCH: Investigate cause → see Steps 6E, 6F, 6G, 6H
+- Applies: QnB=NA, EzSub=NA, Hardcopy=NA (checked at contract level)
+
+Step 6E — Check if there is birthday crossover
+- Purpose: Check if this is the reason why premium amount does not tally.
+- Scenario NO: No birthday crossover → continue investigation
+- Scenario YES: Birthday crossover found → check if backdating is possible
+
+Step 6F — ERI checks (basic plan start date vs backdated/inception date)
+- Purpose: Confirm backdating feasibility.
+- Scenario VALID: Basic plan start date is before backdated/inception date → can backdate
+
+Step 6G — Manually backdate and refresh all screens
+- Purpose: Correct premium amount if backdating is possible.
+
+Step 6H — Check for other reasons why premium does not tally
+- Purpose: E.g., Gender or DOB update under Lives Assured page, campaign code.
+
+Step 6I — Check Payment Mode and amounts on L400 vs PROPF (Section C)
+- Data Source: L400
+- Scenario MATCH: Payment methods are correct → Pass
+
+### Category 7: Follow Up Code Checks
+
+Step 7A — Open Proposal Follow-ups screen on L400
+- Purpose: Review follow-up items.
+
+Step 7B — Check if all follow-ups are R (Resolved)
+- Data Source: L400
+- Scenario YES (all R): No outstanding issues → Pass
+- Scenario NO (not all R): Outstanding issues exist; take follow-up action → Fail
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 7C — Take required follow-up action
+- Purpose: Resolve outstanding issues.
+- Applies: QnB=NO, EzSub=NO, Hardcopy=NO (manual action)
+
+Common Follow-up Codes:
+- F45: Standard follow-up
+- CSL: CareShield Life related
+- C09: GNS check related
+- AT3: Additional requirement
+
+### Category 8: Jet Underwriting
+
+Step 8A — Open Client Underwriting Inquiries screen on L400
+- Purpose: Review underwriting indicators.
+
+Step 8B — Check ANB and Total Aggregate SA
+- Data Source: L400
+- Rule: Total Aggregate SA <= $6,000 AND ANB 18–30 → Continue (Pass)
+- Rule: Total Aggregate SA > $6,000 → Refer to UW
+- Rule: Total Aggregate SA > $5,000 AND ANB >= 31 → Refer to UW
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 8C — Check UW Sub-std value
+- Data Source: L400
+- Scenario N or A: Continue → Pass
+- Scenario Y or M: Refer to UW → Fail
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 8D — Check Decline value
+- Data Source: L400
+- Scenario N or A: Continue → Pass
+- Scenario Y or M: Refer to UW → Fail
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 8E — Check Postpone value
+- Data Source: L400
+- Scenario N or A: Continue → Pass
+- Scenario Y or M: Refer to UW → Fail
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 8F — Check Claim Ind value
+- Data Source: L400
+- Scenario N or A: Continue → Pass
+- Scenario Y or M: Refer to UW UNLESS only Claim Ind is Y (then proceed to RCS checks) → Conditional
+- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+
+Step 8G — Check if all indicators are N and only Claim Ind is Y
+- Data Source: L400
+- Scenario YES (only Claim Ind = Y, all others = N): Perform RCS checks → Step 8H
+- Scenario NO: Refer to UW
+
+Step 8H — RCS checks (Shield claim ICD codes)
+- Data Source: RCS
+- Scenario PASS (ICD codes fall under Pass list): Decision = Standard
+- Scenario REFER TO UW (ICD codes fall under Refer list): Decision = Refer to UW
+- Applies: QnB=NO, EzSub=NO, Hardcopy=NO (decision step)
+
+### Category 9: Decision
+
+Step 9A — Take decision and lock case
+- Lock case based on decision path determined by all preceding checks.
+
+────────────────────────────────────────────────────────────────────────────────
+
+## DECISION OUTCOMES (AI Recommendation Paths)
+
+### A) Standard — Accept with No Further Requirements
+When to use: No underwriter review required AND no outstanding items.
+Steps:
+1. Go to 'Underwriting Decision Update' screen on L400
+2. Set 'Proposal Accepted' = Y
+3. Set 'Print Acceptance Letter' = B
+4. Go to DotSphere
+5. Select Decision: 'Decision Locked with No Further Requirements'
+
+### B) Standard with Further Requirements
+When to use: No underwriter review required BUT further requirements needed (e.g., missing mandatory info/documents).
+Steps:
+1. Go to 'Proposal Follow-ups' screen on L400
+2. Set 'Print Letter' = B
+3. Go to DotSphere
+4. Select Decision: 'All Data Verified?' + 'Mandatory PF/BI/FFF Missing Info?' + 'Initial/Continue Pending Requirement with Original NTU days'
+
+### C) Refer to UW
+When to use: Jet underwriting rules or indicators require underwriter review.
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Underwriting Review?'
+
+### D) Trigger GNS Review
+When to use: C09 follow up code is 'O' OR fields were amended requiring GNS check.
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Trigger GNS review'
+
+### E) Trigger Compliance Docs Received / Trigger Compliance
+When to use: GNS follow up code is 'O' OR there is a GNS hit requiring compliance review.
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Compliance Docs Received/Trigger Compliance'
+
+### F) Withdrawal Request Received
+When to use: Withdrawal request is received.
+Steps:
+1. Go to 'Contract Issue' screen on L400
+2. Enter Contract Number
+3. Action = B
+4. Reason = N001
+5. Go to DotSphere
+6. Select Decision: 'Withdrawal Request Received'
+
+────────────────────────────────────────────────────────────────────────────────
+
+## DECISION LOGIC SUMMARY
+
+IF all checks pass AND all follow-ups = R AND no UW indicators triggered:
+→ Decision A: Standard
+
+IF all checks pass BUT outstanding items exist (missing docs, unresolved follow-ups):
+→ Decision B: Standard with Further Requirements
+
+IF any Jet UW indicator (8C, 8D, 8E, 8F) = Y or M:
+→ Decision C: Refer to UW
+
+IF SA > $6,000:
+→ Decision C: Refer to UW
+
+IF SA > $5,000 AND ANB >= 31:
+→ Decision C: Refer to UW
+
+IF only Claim Ind = Y AND all other indicators = N:
+→ Perform RCS checks (8H)
+  → IF RCS Pass: Decision A (Standard)
+  → IF RCS Refer: Decision C (Refer to UW)
+
+IF C09 follow-up code = 'O' OR fields amended for GNS:
+→ Decision D: Trigger GNS Review
+
+IF GNS follow-up code = 'O' OR GNS hit:
+→ Decision E: Trigger Compliance
+
+IF withdrawal request received:
+→ Decision F: Withdrawal Request Received
+
+────────────────────────────────────────────────────────────────────────────────
+
+## EXCEPTIONS / KNOWLEDGE GAPS
+
+Flag and log for clarification if any of the following occurs:
+- Ambiguous or missing scenario rules
+- Missing definitions of specific follow-up codes
+- Unclear thresholds or reference lists (e.g., ICD pass/fail list for RCS checks)
+- Multiple client records found with no clear resolution path
+
+## References
+- NTU Processing Steps (rule table / step list)
+- SOP for Jet Criteria for All Plans
+- 03 NBA Master SOP (client information verification)
+- 1 - PDD - STP for Clean Cases v2.0

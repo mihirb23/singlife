@@ -1,30 +1,10 @@
 #!/usr/bin/env python3
-"""
-Singlife — Add Policy to Knowledge Base
-=========================================
-Extracts text from an insurance PDF and saves it to knowledge_base/
-so that the AI assistant automatically includes it on next startup.
-
-Usage
------
-  # From the project root:
-  python scripts/add_policy.py <path/to/policy.pdf> [--name output-name]
-
-Examples
---------
-  python scripts/add_policy.py "AIA Home Insurance 2024.pdf"
-  python scripts/add_policy.py docs/ntuc_home.pdf --name ntuc_home_2024
-  python scripts/add_policy.py "Great Eastern Policy.pdf" --name great_eastern_home_sg
-
-Output
-------
-  knowledge_base/<name>.txt   ← ready for the AI to load on next server restart
-
-Requirements
-------------
-  pypdf  (already in requirements.txt)
-  pip install pypdf
-"""
+# quick script to extract text from a policy PDF and save it
+# to knowledge_base/ so the AI assistant picks it up on restart
+#
+# usage:
+#   python scripts/add_policy.py "some_policy.pdf"
+#   python scripts/add_policy.py docs/policy.pdf --name aia_home_2024
 
 import sys
 import argparse
@@ -35,10 +15,7 @@ def extract_pdf_text(pdf_path: Path) -> str:
     try:
         import pypdf
     except ImportError:
-        sys.exit(
-            "Error: pypdf is not installed.\n"
-            "Run: pip install pypdf"
-        )
+        sys.exit("Error: pypdf is not installed. Run: pip install pypdf")
 
     if not pdf_path.exists():
         sys.exit(f"Error: File not found: {pdf_path}")
@@ -63,88 +40,52 @@ def extract_pdf_text(pdf_path: Path) -> str:
 
 
 def slugify(name: str) -> str:
-    """Convert a string to a safe filename slug."""
     name = name.lower()
     name = re.sub(r'[^a-z0-9]+', '_', name)
-    name = name.strip('_')
-    return name
+    return name.strip('_')
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract an insurance PDF and add it to the Singlife knowledge base."
+        description="Extract text from an insurance PDF and add it to the knowledge base."
     )
-    parser.add_argument(
-        'pdf',
-        type=Path,
-        help="Path to the insurance policy PDF file."
-    )
-    parser.add_argument(
-        '--name', '-n',
-        type=str,
-        default=None,
-        help=(
-            "Output filename (without .txt extension). "
-            "Defaults to the PDF filename. "
-            "Example: --name aia_home_2024"
-        )
-    )
+    parser.add_argument('pdf', type=Path, help="Path to the PDF file")
+    parser.add_argument('--name', '-n', type=str, default=None,
+                        help="Output filename without .txt (defaults to PDF name)")
     args = parser.parse_args()
 
     pdf_path = args.pdf.resolve()
-
-    # Determine output filename
-    if args.name:
-        out_name = slugify(args.name)
-    else:
-        out_name = slugify(pdf_path.stem)
-
+    out_name = slugify(args.name) if args.name else slugify(pdf_path.stem)
     if not out_name:
         out_name = "policy"
 
-    # Locate knowledge_base/ relative to this script (scripts/ → root)
+    # knowledge_base/ is at the project root (one level up from scripts/)
     kb_dir = Path(__file__).parent.parent / 'knowledge_base'
     kb_dir.mkdir(exist_ok=True)
     out_path = kb_dir / f"{out_name}.txt"
 
-    print(f"\nSinglife — Add Policy to Knowledge Base")
-    print(f"{'─' * 44}")
+    print(f"\nAdding policy to knowledge base")
     print(f"  Source : {pdf_path}")
-    print(f"  Output : {out_path}")
-    print()
+    print(f"  Output : {out_path}\n")
 
-    # Extract
     text = extract_pdf_text(pdf_path)
 
     if not text.strip():
-        print(
-            "\nWarning: No text could be extracted from this PDF.\n"
-            "The PDF may be image-based (scanned). For scanned PDFs,\n"
-            "you will need an OCR tool such as Adobe Acrobat or tesseract\n"
-            "to first convert it to a text-based PDF, then run this script again."
-        )
+        print("\nNo text extracted — PDF might be scanned/image-based.")
+        print("Try OCR (e.g. Adobe Acrobat or tesseract) first.")
         sys.exit(1)
 
-    # Write output
     header = (
         f"# {pdf_path.stem}\n"
         f"Source file: {pdf_path.name}\n"
-        f"Pages extracted: {text.count(chr(12)) + len(text.split(chr(10) * 2))}\n"
-        f"Added via: scripts/add_policy.py\n\n"
+        f"Pages extracted: {text.count(chr(12)) + len(text.split(chr(10) * 2))}\n\n"
         f"{'─' * 80}\n\n"
     )
     out_path.write_text(header + text, encoding='utf-8')
 
-    char_count = len(text)
-    word_count = len(text.split())
-
-    print(f"  Done!")
-    print(f"  Extracted : {char_count:,} characters | {word_count:,} words")
-    print(f"  Saved to  : {out_path}")
-    print()
-    print(f"  Next step: Restart the Singlife server to load this policy.")
-    print(f"  The AI will automatically include '{pdf_path.stem}' in its knowledge base.")
-    print()
+    print(f"  Done! {len(text):,} chars extracted")
+    print(f"  Saved to: {out_path}")
+    print(f"  Restart the server to load it.\n")
 
 
 if __name__ == '__main__':

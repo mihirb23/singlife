@@ -1,6 +1,4 @@
-/* ─────────────────────────────────────────────────────────────────────────────
-   Singlife — Dark minimal UI
-   ───────────────────────────────────────────────────────────────────────────── */
+/* styles for the singlife AI ops assistant — dark theme */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -92,6 +90,36 @@ body { display: flex; height: 100vh; overflow: hidden; }
 }
 
 .icon-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); color: var(--text); }
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid var(--border-l);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.mode-btn:hover { border-color: var(--text-dim); color: var(--text); }
+
+.mode-btn.active {
+  background: white;
+  color: black;
+  border-color: white;
+}
 
 /* Sidebar sections */
 .sidebar-section {
