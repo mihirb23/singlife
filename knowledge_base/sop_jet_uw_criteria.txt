@@ -1,0 +1,156 @@
+# SOP-JET-UW-001: Jet Underwriting Criteria for CareShield Plans
+
+## Purpose
+Define the automated underwriting (Jet UW) decision rules for CareShield Standard (EYA) and CareShield Plus (EYB) applications. These rules determine whether a case can be straight-through processed (STP) or needs manual underwriter review.
+
+## Scope
+Applies to all CareShield new business applications across QnB, EzSub, and Hardcopy channels. Used in conjunction with the Client Underwriting Enquiries screen on L400.
+
+## Definitions
+- ANB: Age Next Birthday — calculated from client DOB relative to policy commencement date
+- SA: Sum Assured — the Total Aggregate SA shown on Client Underwriting Enquiries screen
+- UW Sub-std: Substandard underwriting indicator on L400
+- Decline: Previous decline indicator on L400
+- Postpone: Previous postponement indicator on L400
+- Claim Ind: Claims indicator on L400
+- RCS: Reinsurance Claims System — used for ICD code verification when Claim Ind is flagged
+- STP: Straight-Through Processing — case proceeds without manual UW review
+- ICD: International Classification of Diseases codes
+
+## Plan Codes
+- EYA: Singlife CareShield Standard
+- EYB: Singlife CareShield Plus
+
+## Eligibility for CareShield
+- Life Assured must be covered under basic ElderShield or CareShield Life
+- Applicant must be below 62 years old
+- Must be Singapore Resident (resided >183 days in last 12 months)
+
+## Jet Underwriting Decision Rules
+
+### Rule 1: ANB and Total Aggregate SA Check
+
+Check the Client Underwriting Enquiries screen on L400 for the ANB at policy commencement and Total Aggregate SA across all risk types.
+
+| Condition | Decision |
+|-----------|----------|
+| Total Aggregate SA <= $6,000 AND ANB between 18-30 | Continue to STP |
+| Total Aggregate SA > $6,000 | Refer to UW |
+| Total Aggregate SA > $5,000 AND ANB >= 31 | Refer to UW |
+| Total Aggregate SA <= $5,000 AND ANB between 31-61 | Continue to STP |
+
+Note: For CareShield plans, the SA on the Client Underwriting Enquiries screen reflects the Long Term Care aggregate. This includes the monthly benefit amount from the current proposal plus any existing in-force SA.
+
+Example from UAT:
+- Long Term Care: Aggregate SA Proposal = $8,000, In-force = $0, Total = $8,000
+- If ANB = 38 → Total SA $8,000 > $6,000 → Refer to UW
+
+### Rule 2: UW Sub-standard Indicator
+
+| Value | Meaning | Decision |
+|-------|---------|----------|
+| N | No substandard history | Continue |
+| A | Not applicable | Continue |
+| Y | Yes — substandard terms issued previously | Refer to UW |
+| M | Modified — substandard terms currently active | Refer to UW |
+
+### Rule 3: Decline Indicator
+
+| Value | Meaning | Decision |
+|-------|---------|----------|
+| N | No previous decline | Continue |
+| A | Not applicable | Continue |
+| Y | Yes — previously declined | Refer to UW |
+| M | Modified | Refer to UW |
+
+### Rule 4: Postpone Indicator
+
+| Value | Meaning | Decision |
+|-------|---------|----------|
+| N | No previous postponement | Continue |
+| A | Not applicable | Continue |
+| Y | Yes — previously postponed | Refer to UW |
+| M | Modified | Refer to UW |
+
+### Rule 5: Claim Indicator
+
+| Value | Meaning | Decision |
+|-------|---------|----------|
+| N | No claims history | Continue |
+| A | Not applicable | Continue |
+| Y | Yes — has claims history | Check Rule 6 below |
+| M | Modified | Refer to UW |
+
+### Rule 6: Claim Ind Exception — RCS Check
+
+This rule only applies when:
+- Claim Ind = Y
+- AND all other indicators (UW Sub-std, Decline, Postpone) = N
+
+In this case, perform RCS checks:
+- Look up the Shield claim ICD codes in the RCS system
+- If ICD codes fall under the "Pass" list → Decision: Standard (STP)
+- If ICD codes fall under the "Refer to UW" list → Decision: Refer to UW
+
+Note: The specific ICD pass/fail classification list is maintained separately by the UW team. This is a known knowledge gap — see Knowledge Gap Log #1.
+
+## Decision Summary
+
+```
+START
+  |
+  +-- Check ANB + Total Aggregate SA (Rule 1)
+  |     |-- Exceeds threshold? --> REFER TO UW
+  |     |-- Within limits? --> Continue
+  |
+  +-- Check UW Sub-std (Rule 2)
+  |     |-- Y or M? --> REFER TO UW
+  |     |-- N or A? --> Continue
+  |
+  +-- Check Decline (Rule 3)
+  |     |-- Y or M? --> REFER TO UW
+  |     |-- N or A? --> Continue
+  |
+  +-- Check Postpone (Rule 4)
+  |     |-- Y or M? --> REFER TO UW
+  |     |-- N or A? --> Continue
+  |
+  +-- Check Claim Ind (Rule 5)
+  |     |-- N or A? --> Continue to DECISION
+  |     |-- M? --> REFER TO UW
+  |     |-- Y? --> Check if ONLY Claim Ind flagged
+  |               |-- Other indicators also flagged? --> REFER TO UW
+  |               |-- Only Claim Ind? --> RCS CHECK (Rule 6)
+  |                     |-- ICD Pass? --> STANDARD (STP)
+  |                     |-- ICD Refer? --> REFER TO UW
+  |
+  +-- All checks passed --> STANDARD (STP)
+```
+
+## CareShield-Specific Notes
+
+### Premium Structure (from application form)
+- Monthly Benefit: e.g., S$3,000.00
+- Benefit Payout: Level or Escalating
+- Annual Premium: includes GST
+- Premium Term: until age 69 ANB
+- MediSave deduction: up to S$600/year, remainder via credit card
+
+### Follow-Up Codes Relevant to CareShield
+- CSL: CareShield Life specific follow-up — must be resolved (R) before STP
+- F45: Standard follow-up item
+- C09: GNS (Government Name Screening) check related
+- AT3: Additional requirement pending
+
+### Health Questions (Section B of Application Form)
+CareShield applications include simplified health questions:
+1. History of cancer, diabetes, stroke, AIDS, dementia, heart/liver/kidney/lung disease, high BP
+2. Ongoing medication >14 days, recurring symptoms, assistance needs, reduced daily living ability
+
+If any health question is answered "Yes", the case typically requires UW review regardless of Jet UW indicators.
+
+## References
+- SOP-NBIG-STP-001 (Steps 8A-8H)
+- Client Underwriting Enquiries screen (L400)
+- QnB CareShield Application Form (PROPF)
+- CareShield Life and Long-Term Care Act 2019
