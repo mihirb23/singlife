@@ -1,0 +1,135 @@
+REFERENCE: UNDERWRITING DECISIONS AND OUTCOMES
+Source: NB.MASTER (MPCI Master File) — 807,851 policy records
+Extracted: 2026-03-30
+
+This document provides reference data on UW decision types, policy statuses,
+product types, channels, and loading/exclusion patterns observed in actual data.
+
+====================================================================
+UW OUTCOMES (UW_OUTCOME1)
+====================================================================
+
+  (a) Standard                    — 63 cases (57%)
+      Policy issued at standard terms, no loading or exclusion.
+
+  (b) Revised Terms               — 43 cases (39%)
+      Policy issued with modified terms (loading and/or exclusion).
+
+  (e) No decision - Withdrawn     — 5 cases (5%)
+      Application withdrawn before UW decision was made.
+
+====================================================================
+MEDICAL UW OUTCOMES (UW_OUTCOME2)
+====================================================================
+
+  (a) Medically Standard          — 67 cases (60%)
+      No medical issues affecting terms.
+
+  (b) Medical Revised Terms       — 39 cases (35%)
+      Medical findings led to modified terms.
+
+  (e) No decision - Withdrawn     — 5 cases (5%)
+      Withdrawn before medical UW completed.
+
+====================================================================
+DECISION BREAKDOWN
+====================================================================
+
+  No Loading or Exclusion         — 70 cases (63%)
+  Exclusion only                  — 21 cases (19%)
+  Loading only                    — 12 cases (11%)
+  Loading and Exclusion           — 8 cases (7%)
+
+====================================================================
+LOADING BANDS (when loading applied)
+====================================================================
+
+  0. no loading                   — 86 cases
+  b. >= 50% and < 75%            — 7 cases
+  d. >= 100% and < 125%          — 7 cases
+  c. >= 75% and < 100%           — 3 cases
+  f. >= 150% and < 200%          — 2 cases
+  g. >= 200% and < 250%          — 1 case
+  k. no decision and no loading   — 5 cases
+
+====================================================================
+POLICY STATUSES
+====================================================================
+
+  In Force     — 63 cases (57%)   Active policies
+  Lapsed       — 27 cases (24%)   Policies that lapsed (non-payment)
+  Withdrawn    — 18 cases (16%)   Applications withdrawn
+  Expired      — 2 cases (2%)     Policies reached term end
+  DD Claim     — 1 case (1%)      Dread Disease claim processed
+
+====================================================================
+PRODUCT TYPES
+====================================================================
+
+  Singlife Elite Term             — 53 cases (48%)   Term life insurance
+  MyWholeLifePlan III             — 11 cases (10%)   Whole life plan
+  My MultiPay CI Plan III         — 11 cases (10%)   Critical illness
+  MyEasySaver                     — 8 cases (7%)     Savings plan
+  MyLifeIncome                    — 5 cases (5%)     Income protection
+  Singlife Disability Income      — 4 cases (4%)     Disability income
+  MyProtector - Legacy            — 3 cases (3%)     Protection plan
+  Singlife Maternity Care         — 2 cases (2%)     Maternity coverage
+  MyRetirementChoice              — 1 case (1%)      Retirement plan
+  MyProtector - Decreasing        — 1 case (1%)      Decreasing term
+
+Product Groups:
+  Life    — 85 cases (77%)
+  GIO     — 14 cases (13%)   (Guaranteed Insurability Option)
+
+====================================================================
+CHANNELS
+====================================================================
+
+  FA Partners   — 88 cases (79%)   Financial Advisor channel
+  PIAS          — 12 cases (11%)   Platform / Independent Advisory
+  SFA           — 11 cases (10%)   Singlife Financial Advisors
+
+====================================================================
+SUBMISSION TYPES
+====================================================================
+
+  TrustedHub    — 87 cases (78%)   Digital submission
+  Manual        — 12 cases (11%)   Paper/manual submission
+
+====================================================================
+EXCLUSION CODES (when exclusions applied)
+====================================================================
+
+Common exclusion patterns:
+  ZZ999   — General exclusion code (8 cases)
+  CI999   — Critical Illness general exclusion (3 cases)
+  MC999   — MultiPay CI general exclusion (3 cases)
+  TPMLH   — Total Permanent Disability - musculoskeletal/lower half (2 cases)
+  CWCAF   — Critical illness waiver (2 cases)
+  CIMAN   — CI manual exclusion (2 cases)
+
+Exclusion naming convention:
+  CI___   — Critical Illness rider exclusion
+  TP___   — Total Permanent Disability exclusion
+  MC___   — MultiPay CI exclusion
+  EC___   — Early CI exclusion
+  DI___   — Disability Income exclusion
+  CW___   — CI Waiver exclusion
+  ZZ___   — General/catch-all exclusion
+  LI___   — Life exclusion
+
+====================================================================
+COVER CODES (rider/benefit codes on policies)
+====================================================================
+
+Most common riders/benefits:
+  ENUF   — Enhanced Universal Life Fund (53 cases)
+  TPAQ   — Total Permanent Disability (41 cases)
+  CIAY   — Critical Illness (21 cases)
+  HADB   — Hospital Allowance Daily Benefit (12 cases)
+  HWAB   — Hospital Ward & Board (12 cases)
+  TADB   — Term Assurance Daily Benefit (12 cases)
+  TIAB   — Term Insurance Additional Benefit (12 cases)
+  TIDB   — Term Insurance Daily Benefit (12 cases)
+  TPWB   — TPD Waiver of Premium (12 cases)
+  HNRI   — Health/Nursing Rider (8 cases)

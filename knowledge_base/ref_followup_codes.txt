@@ -1,0 +1,190 @@
+REFERENCE: FOLLOW-UP (FUP) CODE DICTIONARY
+Source: NB.MASTER (MPCI Master File) — 807,851 policy records
+Extracted: 2026-03-30
+
+This document lists all follow-up codes found in actual NBIG policy data,
+with their frequency of occurrence and known descriptions.
+
+====================================================================
+FOLLOW-UP CODES — COMPLETE LIST (93 unique codes observed)
+====================================================================
+
+HIGH FREQUENCY CODES (appeared 10+ times in dataset):
+
+  F45   — Premium mismatch / follow-up required (53 occurrences)
+           Used when premium amounts don't match between proposal and system.
+  LIA   — Liability check / Life Insured Additional info (51 occurrences)
+           Related to additional liability or information requirements.
+  PAC   — Policy Admin Check / Pending Admin Completion (44 occurrences)
+           Administrative follow-up for policy processing completion.
+  UWO   — Underwriting Outstanding (44 occurrences)
+           General UW follow-up indicating outstanding underwriting items.
+  LOD   — Letter of Decline / Lapse of Documents (41 occurrences)
+           Document-related follow-up, often indicating documents still needed.
+  RP1   — Reprint 1 / Reissue Print (25 occurrences)
+           First reprint request for documents.
+  UW2   — Underwriting Follow-up 2 (18 occurrences)
+           Second-level underwriting follow-up.
+  B90   — Benefit/Rider Review (17 occurrences)
+           Review of benefits or rider coverage.
+  Q36   — Query 36 / Outstanding Query (13 occurrences)
+           Specific query follow-up code.
+  MEN   — Medical Examination Needed (11 occurrences)
+           Follow-up for required medical examination.
+  APS   — Attending Physician's Statement (10 occurrences)
+           Medical follow-up requiring doctor's report.
+
+MEDIUM FREQUENCY CODES (appeared 3-9 times):
+
+  B54   — Benefit Review 54 (9 occurrences)
+  MED   — Medical Follow-up (9 occurrences)
+  B63   — Benefit Review 63 (9 occurrences)
+  TLI   — Top-up Life Insured (9 occurrences)
+  B65   — Benefit Review 65 (9 occurrences)
+  OTH   — Other Follow-up (8 occurrences)
+  P1    — Pending Item 1 (8 occurrences)
+  P8    — Pending Item 8 (8 occurrences)
+  AP1   — Additional Pending 1 (8 occurrences)
+  UW3   — Underwriting Follow-up 3 (7 occurrences)
+  B17   — Benefit Review 17 (6 occurrences)
+  ECG   — ECG Test Required (6 occurrences)
+  B16   — Benefit Review 16 (6 occurrences)
+  Q41   — Outstanding Query 41 (5 occurrences)
+  QA9   — Quality Assurance 9 (5 occurrences)
+  RP2   — Reprint 2 (5 occurrences)
+  P2    — Pending Item 2 (5 occurrences)
+  B91   — Benefit Review 91 (5 occurrences)
+  TXT   — Text/Free-form Note (4 occurrences)
+  B29   — Benefit Review 29 (4 occurrences)
+  P5    — Pending Item 5 (4 occurrences)
+  QA2   — Quality Assurance 2 (4 occurrences)
+  CON   — Conditional Offer / Consent (4 occurrences)
+  B38   — Benefit Review 38 (4 occurrences)
+  B13   — Benefit Review 13 (4 occurrences)
+  S32   — Screening Code 32 (4 occurrences)
+  R01   — Reinsurance Follow-up 1 (4 occurrences)
+  B23   — Benefit Review 23 (3 occurrences)
+  SCG   — Screening (3 occurrences)
+  UW4   — Underwriting Follow-up 4 (3 occurrences)
+  MRA   — Medical Records Assessment (3 occurrences)
+  Q28   — Outstanding Query 28 (3 occurrences)
+  B70   — Benefit Review 70 (3 occurrences)
+  B22   — Benefit Review 22 (3 occurrences)
+  B58   — Benefit Review 58 (3 occurrences)
+
+LOW FREQUENCY CODES (appeared 1-2 times):
+
+  B43   — Benefit Review 43 (2 occurrences)
+  ITA   — IT Admin Follow-up (2 occurrences)
+  P3    — Pending Item 3 (2 occurrences)
+  36A   — Follow-up 36A (2 occurrences)
+  P13   — Pending Item 13 (2 occurrences)
+  S64   — Screening Code 64 (2 occurrences)
+  CR1   — Claims Review 1 (2 occurrences)
+  S28   — Screening Code 28 (2 occurrences)
+  B66   — Benefit Review 66 (2 occurrences)
+  OGF   — Outstanding General Follow-up (2 occurrences)
+  B75   — Benefit Review 75 (1 occurrence)
+  B18   — Benefit Review 18 (1 occurrence)
+  B26   — Benefit Review 26 (1 occurrence)
+  B27   — Benefit Review 27 (1 occurrence)
+  B30   — Benefit Review 30 (1 occurrence)
+  B40   — Benefit Review 40 (1 occurrence)
+  OT2   — Other Follow-up 2 (1 occurrence)
+  OT3   — Other Follow-up 3 (1 occurrence)
+  Q21   — Outstanding Query 21 (1 occurrence)
+  UW5   — Underwriting Follow-up 5 (1 occurrence)
+  UW6   — Underwriting Follow-up 6 (1 occurrence)
+  A23   — Administrative Code 23 (1 occurrence)
+  P&L   — Profit & Loss Review (1 occurrence)
+  P7    — Pending Item 7 (1 occurrence)
+  PNL   — Panel Review (1 occurrence)
+  Q17   — Outstanding Query 17 (1 occurrence)
+  UEM   — UW Endorsement (1 occurrence)
+  F92   — Follow-up 92 (1 occurrence)
+  MAR   — Marriage-related Follow-up (1 occurrence)
+  S33   — Screening Code 33 (1 occurrence)
+  S34   — Screening Code 34 (1 occurrence)
+  S35   — Screening Code 35 (1 occurrence)
+  B35   — Benefit Review 35 (1 occurrence)
+  Q39   — Outstanding Query 39 (1 occurrence)
+  Q40   — Outstanding Query 40 (1 occurrence)
+  B36   — Benefit Review 36 (1 occurrence)
+  AP2   — Additional Pending 2 (1 occurrence)
+  B44   — Benefit Review 44 (1 occurrence)
+  S67   — Screening Code 67 (1 occurrence)
+  A22   — Administrative Code 22 (1 occurrence)
+  MEH   — Medical Exam History (1 occurrence)
+  R02   — Reinsurance Follow-up 2 (1 occurrence)
+  B24   — Benefit Review 24 (1 occurrence)
+  B31   — Benefit Review 31 (1 occurrence)
+
+====================================================================
+KEY FOLLOW-UP CODE CATEGORIES
+====================================================================
+
+PREMIUM/FINANCIAL:
+  F45 — Premium mismatch
+  F92 — Financial follow-up
+
+UNDERWRITING:
+  UWO — UW Outstanding (general)
+  UW2 — UW Follow-up Level 2
+  UW3 — UW Follow-up Level 3
+  UW4 — UW Follow-up Level 4
+  UW5 — UW Follow-up Level 5
+  UW6 — UW Follow-up Level 6
+  UEM — UW Endorsement
+
+MEDICAL:
+  APS — Attending Physician's Statement
+  MED — Medical follow-up
+  MEN — Medical Examination Needed
+  MEH — Medical Exam History
+  ECG — ECG Test Required
+  MRA — Medical Records Assessment
+
+BENEFIT REVIEWS (B-series):
+  B13, B16, B17, B18, B22, B23, B24, B26, B27, B29, B30, B31,
+  B35, B36, B38, B40, B43, B44, B54, B58, B63, B65, B66, B70,
+  B75, B90, B91
+
+ADMINISTRATIVE:
+  PAC — Pending Admin Completion
+  LIA — Liability / Additional Info
+  LOD — Documents Outstanding
+  OTH — Other
+  TXT — Free-form text note
+  CON — Conditional Offer
+
+QUERIES (Q-series):
+  Q17, Q21, Q28, Q36, Q39, Q40, Q41, QA2, QA9
+
+SCREENING (S-series):
+  S28, S32, S33, S34, S35, S64, S67, SCG
+
+PENDING ITEMS (P-series):
+  P1, P2, P3, P5, P7, P8, P13, PNL, P&L
+
+REPRINTS:
+  RP1 — Reprint 1
+  RP2 — Reprint 2
+
+REINSURANCE:
+  R01 — Reinsurance 1
+  R02 — Reinsurance 2
+
+CLAIMS:
+  CR1 — Claims Review 1
+
+====================================================================
+EVALUATION RULES
+====================================================================
+
+When evaluating follow-up codes for a case:
+- ALL follow-up codes must have status "R" (Resolved) for the case to proceed
+- Any non-R status means the case has outstanding items
+- F45 (Premium) is the most common — check premium reconciliation
+- UWO/UW2-UW6 indicate underwriting is not complete
+- APS/MED/MEN/ECG indicate medical requirements outstanding
+- Multiple codes on a single policy indicate complex cases requiring manual review

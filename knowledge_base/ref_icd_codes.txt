@@ -1,0 +1,111 @@
+REFERENCE: ICD CODE LIST FOR RCS CLAIMS CHECKS
+Source: NB.MASTER (MPCI Master File) — 807,851 policy records
+Extracted: 2026-03-30
+
+This document lists all ICD (International Classification of Diseases) codes
+found in actual NBIG underwriting data. These codes are used in Step 8H of
+the Jet UW evaluation when Claim Indicator = Y.
+
+====================================================================
+ICD CODES OBSERVED IN DATASET (26 unique codes)
+====================================================================
+
+MUSCULOSKELETAL (most common category):
+  M54   — Dorsalgia (back pain) — 5 occurrences
+  M95   — Other acquired deformities of musculoskeletal system — 2 occurrences
+
+CIRCULATORY SYSTEM:
+  I51   — Complications and ill-defined descriptions of heart disease — 4 occurrences
+  I10   — Essential (primary) hypertension — 2 occurrences
+  I77   — Other disorders of arteries and arterioles — 1 occurrence
+
+METABOLIC/ENDOCRINE:
+  E78   — Disorders of lipoprotein metabolism (high cholesterol) — 5 occurrences
+  E14   — Unspecified diabetes mellitus — 2 occurrences
+  Z68   — Body mass index (BMI) — 2 occurrences
+
+NEOPLASMS:
+  D36   — Benign neoplasm of other and unspecified sites — 3 occurrences
+  D24   — Benign neoplasm of breast — 1 occurrence
+  C80   — Malignant neoplasm without specification of site — 1 occurrence
+
+EAR/EYE:
+  H58   — Other disorders of eye and adnexa (in diseases classified elsewhere) — 3 occurrences
+  H93   — Other disorders of ear — 2 occurrences
+
+RESPIRATORY:
+  J45   — Asthma — 2 occurrences
+
+GENETIC/FAMILY HISTORY:
+  Z83   — Family history of other specific disorders — 3 occurrences
+
+DIGESTIVE:
+  K75   — Other inflammatory liver diseases — 2 occurrences
+  K59   — Other functional intestinal disorders — 1 occurrence
+
+MENTAL/BEHAVIORAL:
+  F32   — Major depressive disorder, single episode — 1 occurrence
+  F32.9 — Major depressive disorder, single episode, unspecified — 1 occurrence
+  F09   — Unspecified organic or symptomatic mental disorder — 1 occurrence
+
+GENITOURINARY:
+  N73   — Other female pelvic inflammatory diseases — 1 occurrence
+
+DERMATOLOGICAL:
+  L30   — Other and unspecified dermatitis — 1 occurrence
+
+SYMPTOMS/SIGNS:
+  R07   — Pain in throat and chest — 1 occurrence
+
+SPECIAL CODES:
+  OC.000 — Occupational code (baseline/standard) — 3 occurrences
+  AV.012 — Aviation risk code — 1 occurrence
+  Z04   — Examination and observation for other reasons — 1 occurrence
+
+====================================================================
+ICD CODE COMBINATIONS (multi-code cases)
+====================================================================
+
+Cases with multiple ICD codes indicate more complex medical histories:
+  H58, I10    — Eye disorder + Hypertension (1 case)
+  E78, K75    — Cholesterol + Liver disease (1 case)
+  I10, M54    — Hypertension + Back pain (1 case)
+  M95, OC.000 — Musculoskeletal + Occupational (1 case)
+  E14, E78    — Diabetes + Cholesterol (1 case)
+  E78, Z68    — Cholesterol + BMI concern (1 case)
+  E78, I51    — Cholesterol + Heart disease (1 case)
+  AV.012, Z04 — Aviation risk + Observation (1 case)
+  F32, F32.9  — Depression codes (1 case)
+
+====================================================================
+RCS CHECK EVALUATION GUIDELINES
+====================================================================
+
+When Claim Indicator = Y in a case, the RCS (Risk Claims System) check
+evaluates the ICD codes against the policy terms:
+
+HIGH RISK (likely refer to UW):
+  - C80 (malignant neoplasm)
+  - F32/F09 (mental health conditions)
+  - I51 (heart disease complications)
+  - E14 (diabetes)
+
+MODERATE RISK (may refer to UW depending on severity/context):
+  - E78 (cholesterol — most common, often leads to exclusion)
+  - I10 (hypertension)
+  - K75 (liver disease)
+  - J45 (asthma)
+  - I77 (arterial disorders)
+
+LOWER RISK (often standard with possible exclusion):
+  - M54 (back pain — most common overall)
+  - D36/D24 (benign neoplasms)
+  - H58/H93 (ear/eye)
+  - L30 (dermatitis)
+  - N73 (pelvic inflammatory)
+  - Z83 (family history only)
+  - R07 (chest pain — symptom only)
+
+NOTE: This classification is derived from observed data patterns in the
+NB.MASTER file. The actual pass/fail determination should be confirmed
+with the UW team (Sharon/Terence) for production use.

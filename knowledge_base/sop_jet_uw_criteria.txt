@@ -92,7 +92,12 @@ In this case, perform RCS checks:
 - If ICD codes fall under the "Pass" list → Decision: Standard (STP)
 - If ICD codes fall under the "Refer to UW" list → Decision: Refer to UW
 
-Note: The specific ICD pass/fail classification list is maintained separately by the UW team. This is a known knowledge gap — see Knowledge Gap Log #1.
+Note: A reference list of 26 ICD codes extracted from NB.MASTER is now available in ref_icd_codes.txt,
+with risk tiers (High/Moderate/Lower) based on observed data patterns. Key codes include:
+- HIGH RISK (refer to UW): C80 (malignant neoplasm), F32/F09 (mental health), I51 (heart disease), E14 (diabetes)
+- MODERATE RISK: E78 (cholesterol), I10 (hypertension), K75 (liver), J45 (asthma)
+- LOWER RISK: M54 (back pain), D36/D24 (benign neoplasms), H58/H93 (ear/eye), Z83 (family history)
+Final pass/fail thresholds should still be confirmed with the UW team (Sharon/Terence).
 
 ## Decision Summary
 

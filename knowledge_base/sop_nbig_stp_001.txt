@@ -1,218 +1,372 @@
 # SOP-NBIG-STP-001: New Business Pre-Issue Checks & Decisioning
 
 ## Purpose
-Provide a clear, step-by-step checklist and decision rules for New Business pre-issue checks (identity, client, contract, follow-ups, Jet underwriting) and derive a recommended case outcome. Designed to be AI-readable for rule-by-rule reasoning.
+Step-by-step checklist and decision rules for New Business pre-issue checks.
+Designed to be AI-readable for rule-by-rule reasoning.
 
 ## Scope
-Applies to New Business processing scenarios across channels: QnB, EzSub, and Hardcopy. Covers document checks, L400 validations, follow-up code checks, Jet underwriting checks, and decision routing.
+Applies to QnB, EzSub, and Hardcopy channels. Covers document checks, L400 validations, follow-up code checks, Jet underwriting checks, and decision routing.
 
 ## Definitions
 - FileNet: Document repository for identity and core documents
 - DotSphere: Application / workflow interface
-- L400: Policy administration system used for client/contract validations
-- RCS: Claims system used for claim/ICD checks (when required)
-- MyInfo: Digital identity submission; consent form timestamp must be valid within 1 year
-- FUP: Follow-up codes on Proposal Follow-ups screen
-- Jet underwriting: Fast checks using Client Underwriting Inquiries indicators
-- STP: Straight-through processing (no underwriter review)
-- ANB: Age Next Birthday
-- SA: Sum Assured
+- L400: Policy administration system (source of truth for client/policy fields)
+- RCS: Claims system for claim/ICD checks
+- MyInfo: Customer consented data source — used to validate consent and compare key data
+- BI: Benefit Illustration — premium & benefit illustration document
+- PF: Proposal Follow-ups — outstanding requirement codes. Blocks case locking when not resolved
+- ANB: Age Next Birthday — pricing age used for premium
+- SA: Sum Assured — coverage amount
 - NRIC: National Registration Identity Card
-- GNS: Government Name Screening
+- GNS: Government Name Screening — triggered by compliance follow-up codes
+- Claim Ind: Claims indicator flag — potential risk signal
+- RCS: Risk/claim screening outcome — Pass/Refer based on ICD mapping
+- STP: Straight-through processing (no underwriter review)
+
+## Follow-Up Code Reference (Core Codes)
+- F45: Premium category — premium mismatch detected (most common FUP code, 53 occurrences in NB.MASTER)
+- C09: Compliance category — GNS re-screening required
+- CSL: Customer category — clarification required
+- AT3: Additional requirement pending
+- LIA: Liability / additional info required (51 occurrences)
+- PAC: Pending admin completion (44 occurrences)
+- UWO: Underwriting outstanding (44 occurrences)
+- LOD: Documents outstanding (41 occurrences)
+- APS: Attending Physician's Statement required (10 occurrences)
+- MEN: Medical examination needed (11 occurrences)
+- ECG: ECG test required (6 occurrences)
+- B90: Benefit/rider review (17 occurrences)
+- See ref_followup_codes.txt for the complete dictionary of 93 follow-up codes.
+
+## Billing Reference Codes (from NB.MASTER)
+- BILL_FREQUENCY_CD: 01=Annual, 02=Semi-Annual, 04=Quarterly, 12=Monthly, 00=Single Premium
+- BILL_CHANNEL_CD: B=Bank (GIRO/Direct Debit), D=Direct (Credit Card/Cash)
+
+## Channel Gating Rule
+IMPORTANT: Each step has channel flags (QnB=Y/N, EzSub=Y/N, Hardcopy=Y/N).
+If the channel flag is N for the current channel, the AI MUST SKIP that step entirely.
+Do NOT evaluate skipped steps as Pass or Fail — mark them as "Skip".
+This prevents false failures when a step does not apply to a channel.
 
 ## How to Use
-1) Follow the step list in order.
-2) For each step with scenarios, record outcome as Pass / Fail / Manual Review / Pending.
-3) Use the Decision Outcomes section to derive the final recommendation.
-4) If information is missing or ambiguous, log it in the Knowledge Gap / Ambiguity Log.
+1) Determine the channel from the case data
+2) For each step, check if the channel flag = Y. If N, skip it.
+3) For applicable steps: read Input Data + Rule IF/THEN, return Pass / Fail / Refer Ops / Refer UW / Skip
+4) If an Exception is triggered, record it and recommend next action (do NOT fix data)
+5) Aggregate all results using the Decision Mapping to determine final recommendation
+6) If any rule/threshold is missing or unclear, flag a Knowledge Gap (do NOT guess)
+
+## AI Usage Notes
+- AI must not assume if timestamp is missing
+- FileNet documents: in student scope, metadata only (exists/readable)
+- L400 fields: read-only — AI evaluates fields, never modifies
+- DotSphere: AI recommends decisions, human executes
+- PF codes: if not all R → Further Requirements
+- ANB/SA: used only in threshold rules
+- UW indicators: if Y/M → Refer UW
+- RCS/ICD: AI uses result only, not medical judgement
+- Workflow: AI triggers workflow recommendation, human confirms
 
 ────────────────────────────────────────────────────────────────────────────────
 
-## STEPS & RULES CHECKLIST
+## STEPS & RULES (DETAILED MATRIX)
 
 ### Category 1: Open Documents
 
 Step 1A — Open Identity Document on FileNet
-- Purpose: Ensure that MyInfo documents are submitted.
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: Identity Doc Status
+- Source: FileNet
+- AI Role: Evaluate
+- Rule IF: Document exists → THEN: Pass
+- Exception: Missing → create FUP → Decision Impact: Further Requirements
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 Step 1B — Open Benefit Illustration on FileNet
-- Purpose: Ensure that core documents are submitted.
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: BI Status
+- Source: FileNet
+- AI Role: Evaluate
+- Rule IF: Exists & readable → THEN: Pass
+- Exception: Missing → create FUP → Decision Impact: Further Requirements
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 Step 1C — Open Application Form on DotSphere
-- Purpose: Tally client and contract information against L400.
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: Application Form data + L400 data
+- Source: FileNet + L400
+- AI Role: Evaluate
+- Rule IF: Exists → THEN: Pass
+- Exception: Missing → create FUP → Decision Impact: Further Requirements
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 ### Category 2: Document Checks
 
 Step 2A — Check MyInfo Consent Form Timestamp
-- Data Source: FileNet
-- Scenario VALID: Timestamp is within 1-year validity → Pass
-- Scenario NOT VALID: Treat as outstanding requirement / exception → Fail
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: Consent Timestamp + App Date
+- Source: MyInfo, App Form, FileNet
+- AI Role: Evaluate
+- Rule IF: Timestamp <= 1 year from app date → THEN: Pass
+- Exception: Invalid → create FUP → Decision Impact: Further Requirements
+- AI Note: AI must not assume if timestamp is missing
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 ### Category 3: Client Number Search
 
 Step 3A — Search client on L400 using NRIC/License + NoteLog comment
-- Data Source: L400
-- Scenario 1 RESULT FOUND: Correct client number confirmed → Pass
-- Scenario >1 RESULTS or NONE: Flag issue; manual review to resolve correct client record → Manual Review
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: NRIC
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: 1 result found → THEN: Pass
+- Exception: 0 or >1 results → Exception → Decision Impact: Refer Ops
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 ### Category 4: Duplicate Client Checks
 
 Step 4A — Search client on L400 using Surname + Given Name
-- Data Source: L400
-- Purpose: Check for duplicate client ID (e.g., client may have FIN number in the past).
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: Name
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: Result found → THEN: Proceed to 4B
+- Exception: None → Decision Impact: Refer Ops
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 4B — Check Birth Date and Sex in L400 vs Application Form
-- Data Source: L400
-- Scenario MATCH FOUND: Confirm same client (name is not unique) → Pass
-- Scenario NO MATCH: Manual review; do not proceed as same client → Manual Review
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: DOB + Sex
+- Source: L400 + App Form
+- AI Role: Evaluate
+- Rule IF: Match → THEN: Same client confirmed
+- Exception: Mismatch → Decision Impact: Refer Ops
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 4C — Client patching (merge/void duplicates)
-- Data Source: L400
-- Purpose: Merge/void duplicate client IDs.
-- Applies: QnB=NO, EzSub=YES, Hardcopy=YES
+- Input: Client IDs
+- Source: L400
+- AI Role: Recommend (human-only action)
+- Exception: Human-only → Decision Impact: Refer Ops
+- QnB=NO, EzSub=YES, Hardcopy=YES
 
 ### Category 5: Client Information Checks
 
-Step 5A — Check if client name sequence on L400 matches MyInfo Consent Form
-- Data Source: L400
-- Scenario MATCH: Pass
-- Scenario MISMATCH: Fix client name sequence → Manual Review
+Step 5A — Check if client name sequence on L400 matches MyInfo
+- Input: Name fields
+- Source: L400 + MyInfo
+- AI Role: Evaluate
+- Rule IF: Match → THEN: Pass
+- Exception: Mismatch → Decision Impact: Refer Ops
+- QnB=NO, EzSub=NO, Hardcopy=NO
 
 Step 5B — Update Race from OTH to correct value on L400
-- Data Source: L400
-- Purpose: Update race field if incorrect.
+- Input: Race
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: OTH and Doc shows CHI → THEN: Recommend update
+- Exception: None → Decision Impact: None
+- QnB=NO, EzSub=NO, Hardcopy=NO
 
 Step 5C — Check key fields in L400 vs Application Form
-- Data Source: L400
-- Fields to check:
-  * Sex (Gender affects premium)
-  * Block/Street No, Street Name, Unit No, Postcode, Country (Address — PDPA compliance)
-  * SMS / Mobile number (PDPA compliance)
-  * Email Address (Client needs for MySinglife registration)
-  * Nationality (Compliance related)
-  * Identity No (Compliance related)
-  * Birth Date (ANB affects premium)
-- Scenario ALL MATCH: Pass
-- Scenario ANY MISMATCH: Update required; possible concurrent apps / manual entry errors → Fail (outstanding item)
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
-- IMPORTANT: Information may be wrong due to concurrent applications (e.g. EzSub application submitted after, fields may be keyed wrongly due to manual entry).
+- Input: Sex, Address, SMS, Email, Nationality, Identity No, Birth Date
+- Source: L400 + App Form
+- AI Role: Evaluate
+- Rule IF: All match → THEN: Pass
+- Rule IF: Any mismatch → THEN: Fail
+- Exception: Mismatch → Decision Impact: Further Requirements
+- Why each field matters:
+  * Sex: Gender affects premium
+  * Address: PDPA compliance (prevents return mail)
+  * SMS: PDPA compliance (mobile number)
+  * Email: Client needs for MySinglife account registration
+  * Nationality: Compliance related
+  * Identity No: Compliance related
+  * Birth Date: ANB affects premium
+- IMPORTANT: Information may be wrong due to concurrent applications (e.g. EzSub submitted after, fields keyed wrongly due to manual entry)
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 5D — Update incorrect fields on L400
-- Purpose: Correct any mismatched fields identified in Step 5C.
+- Input: Client fields
+- Source: L400
+- AI Role: Recommend (human-only action)
+- Exception: Human-only → Decision Impact: Refer Ops
+- QnB=NO, EzSub=NO, Hardcopy=NO
 
 ### Category 6: Contract Information Checks
 
-Step 6A — Check Premium Amount on L400 vs Annual Premium on Application Form
-- Data Source: L400
-- Scenario MATCH: Ensure premium amount is correct → Pass
-- Scenario MISMATCH: Investigate cause → see Steps 6E, 6F, 6G, 6H
-- Applies: QnB=NA, EzSub=NA, Hardcopy=NA (checked at contract level)
+Step 6A — Check Premium Amount on L400 vs Annual Premium on App Form
+- Input: Premium Amount + Annual Premium
+- Source: L400 + App Form
+- AI Role: Evaluate
+- Rule IF: Match → THEN: Pass
+- Exception: Mismatch → Decision Impact: Further Analysis
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
 Step 6E — Check if there is birthday crossover
-- Purpose: Check if this is the reason why premium amount does not tally.
-- Scenario NO: No birthday crossover → continue investigation
-- Scenario YES: Birthday crossover found → check if backdating is possible
+- Input: Birth Date
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: No crossover → THEN: Pass
+- Exception: Yes → Decision Impact: Further Analysis
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
 Step 6F — ERI checks (basic plan start date vs backdated/inception date)
-- Purpose: Confirm backdating feasibility.
-- Scenario VALID: Basic plan start date is before backdated/inception date → can backdate
+- Input: Plan dates
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: Valid (start date before backdated date) → THEN: Continue
+- Exception: Invalid → Decision Impact: Block Decision
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
 Step 6G — Manually backdate and refresh all screens
-- Purpose: Correct premium amount if backdating is possible.
+- Input: System action
+- Source: L400
+- AI Role: Recommend (human-only)
+- Exception: Human-only → Decision Impact: Refer Ops
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
-Step 6H — Check for other reasons why premium does not tally
-- Purpose: E.g., Gender or DOB update under Lives Assured page, campaign code.
+Step 6H — Check other reasons why premium does not tally
+- Input: Gender, DOB, Campaign code
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: Resolved → THEN: Continue
+- Exception: Unresolved → Decision Impact: Further Requirements
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
-Step 6I — Check Payment Mode and amounts on L400 vs PROPF (Section C)
-- Data Source: L400
-- Scenario MATCH: Payment methods are correct → Pass
+Step 6I — Check Payment Mode and amounts vs PROPF (Section C)
+- Input: Payment Mode + Amounts
+- Source: L400 + PROPF
+- AI Role: Evaluate
+- Rule IF: Match → THEN: Pass
+- Exception: Mismatch → Decision Impact: Further Requirements
+- QnB=NA, EzSub=NA, Hardcopy=NA
 
 ### Category 7: Follow Up Code Checks
 
 Step 7A — Open Proposal Follow-ups screen on L400
-- Purpose: Review follow-up items.
+- Input: PF list
+- Source: L400
+- AI Role: Evaluate (open/view)
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 7B — Check if all follow-ups are R (Resolved)
-- Data Source: L400
-- Scenario YES (all R): No outstanding issues → Pass
-- Scenario NO (not all R): Outstanding issues exist; take follow-up action → Fail
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: PF status codes
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: All R → THEN: Pass (no outstanding issues)
+- Rule IF: Not all R → THEN: Fail (outstanding issues exist)
+- Exception: Not all R → Decision Impact: Further Requirements
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 7C — Take required follow-up action
-- Purpose: Resolve outstanding issues.
-- Applies: QnB=NO, EzSub=NO, Hardcopy=NO (manual action)
-
-Common Follow-up Codes:
-- F45: Standard follow-up
-- CSL: CareShield Life related
-- C09: GNS check related
-- AT3: Additional requirement
+- Input: PF code
+- Source: L400
+- AI Role: Recommend
+- Exception: Pending → Decision Impact: Block Decision
+- QnB=NO, EzSub=NO, Hardcopy=NO
 
 ### Category 8: Jet Underwriting
 
 Step 8A — Open Client Underwriting Inquiries screen on L400
-- Purpose: Review underwriting indicators.
+- Input: UW indicators screen
+- Source: L400
+- AI Role: Evaluate (open/view)
 
 Step 8B — Check ANB and Total Aggregate SA
-- Data Source: L400
-- Rule: Total Aggregate SA <= $6,000 AND ANB 18–30 → Continue (Pass)
-- Rule: Total Aggregate SA > $6,000 → Refer to UW
-- Rule: Total Aggregate SA > $5,000 AND ANB >= 31 → Refer to UW
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: ANB + Total Aggregate SA
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: SA <= $6,000 AND ANB 18-30 → THEN: Continue
+- Rule IF: SA > $6,000 → THEN: Refer to UW
+- Rule IF: SA > $5,000 AND ANB >= 31 → THEN: Refer to UW
+- Exception: Exceed threshold → Decision Impact: Refer UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8C — Check UW Sub-std value
-- Data Source: L400
-- Scenario N or A: Continue → Pass
-- Scenario Y or M: Refer to UW → Fail
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: UW Sub-std indicator
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: N or A → THEN: Continue
+- Rule IF: Y or M → THEN: Refer to UW
+- Exception: Y/M → Decision Impact: Refer UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8D — Check Decline value
-- Data Source: L400
-- Scenario N or A: Continue → Pass
-- Scenario Y or M: Refer to UW → Fail
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: Decline indicator
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: N or A → THEN: Continue
+- Rule IF: Y or M → THEN: Refer to UW
+- Exception: Y/M → Decision Impact: Refer UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8E — Check Postpone value
-- Data Source: L400
-- Scenario N or A: Continue → Pass
-- Scenario Y or M: Refer to UW → Fail
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: Postpone indicator
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: N or A → THEN: Continue
+- Rule IF: Y or M → THEN: Refer to UW
+- Exception: Y/M → Decision Impact: Refer UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8F — Check Claim Ind value
-- Data Source: L400
-- Scenario N or A: Continue → Pass
-- Scenario Y or M: Refer to UW UNLESS only Claim Ind is Y (then proceed to RCS checks) → Conditional
-- Applies: QnB=YES, EzSub=YES, Hardcopy=YES
+- Input: Claim Ind indicator
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: N or A → THEN: Continue
+- Rule IF: Y or M → THEN: Refer to UW (unless only Claim Ind flagged — see 8G)
+- Exception: Y/M → Decision Impact: Refer UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8G — Check if all indicators are N and only Claim Ind is Y
-- Data Source: L400
-- Scenario YES (only Claim Ind = Y, all others = N): Perform RCS checks → Step 8H
-- Scenario NO: Refer to UW
+- Input: All indicators
+- Source: L400
+- AI Role: Evaluate
+- Rule IF: Only Claim Ind = Y, all others = N → THEN: Do RCS checks (Step 8H)
+- Rule IF: Other indicators also flagged → THEN: Skip RCS, Refer to UW
+- QnB=YES, EzSub=YES, Hardcopy=YES
 
 Step 8H — RCS checks (Shield claim ICD codes)
-- Data Source: RCS
-- Scenario PASS (ICD codes fall under Pass list): Decision = Standard
-- Scenario REFER TO UW (ICD codes fall under Refer list): Decision = Refer to UW
-- Applies: QnB=NO, EzSub=NO, Hardcopy=NO (decision step)
+- Input: ICD result
+- Source: RCS
+- AI Role: Evaluate
+- Rule IF: ICD codes pass → THEN: Standard (STP)
+- Rule IF: ICD codes refer → THEN: Refer to UW
+- Exception: Refer → Decision Impact: Refer UW
+- AI Note: AI uses result only, not medical judgement
+- QnB=NO, EzSub=NO, Hardcopy=NO (decision step)
 
 ### Category 9: Decision
 
-Step 9A — Take decision and lock case
-- Lock case based on decision path determined by all preceding checks.
+Step 9A — Aggregate all results and lock case
+- Input: All step results
+- Source: Workflow
+- AI Role: Decide
+- Rule IF: All pass → THEN: Standard
+- Exception: Any failure → route to appropriate decision path
 
 ────────────────────────────────────────────────────────────────────────────────
 
-## DECISION OUTCOMES (AI Recommendation Paths)
+## DECISION MAPPING
+
+| Condition | AI Recommendation |
+|-----------|------------------|
+| All applicable steps Pass; no outstanding PF | Standard |
+| Any doc missing OR PF not all R OR unresolved data mismatch | Standard with Further Requirements |
+| Any UW indicator triggers OR RCS result = Refer | Refer to UW |
+| C09 outstanding or compliance hit | Trigger GNS / Compliance |
+| Withdrawal request received | Withdrawal |
+
+## WORKFLOW ACTION LABELS
+
+| Action | Human Review Required |
+|--------|----------------------|
+| Decision Locked with No Further Requirements | No |
+| Trigger follow-up / pending requirements | No |
+| Underwriting Review | Yes |
+| Compliance workflow | Yes |
+| Close case (withdrawal) | No |
+
+────────────────────────────────────────────────────────────────────────────────
+
+## DECISION OUTCOMES (Detailed Steps)
 
 ### A) Standard — Accept with No Further Requirements
-When to use: No underwriter review required AND no outstanding items.
+When to use: All steps pass, no outstanding PF, no UW triggers.
 Steps:
 1. Go to 'Underwriting Decision Update' screen on L400
 2. Set 'Proposal Accepted' = Y
@@ -221,7 +375,7 @@ Steps:
 5. Select Decision: 'Decision Locked with No Further Requirements'
 
 ### B) Standard with Further Requirements
-When to use: No underwriter review required BUT further requirements needed (e.g., missing mandatory info/documents).
+When to use: No UW trigger, but outstanding items exist (missing docs, PF not all R, data mismatch).
 Steps:
 1. Go to 'Proposal Follow-ups' screen on L400
 2. Set 'Print Letter' = B
@@ -229,7 +383,7 @@ Steps:
 4. Select Decision: 'All Data Verified?' + 'Mandatory PF/BI/FFF Missing Info?' + 'Initial/Continue Pending Requirement with Original NTU days'
 
 ### C) Refer to UW
-When to use: Jet underwriting rules or indicators require underwriter review.
+When to use: Any Jet UW indicator triggered (Y/M) or SA exceeds threshold or RCS = Refer.
 Steps:
 1. Go to DotSphere
 2. Select Decision: 'Underwriting Review?'
@@ -240,8 +394,8 @@ Steps:
 1. Go to DotSphere
 2. Select Decision: 'Trigger GNS review'
 
-### E) Trigger Compliance Docs Received / Trigger Compliance
-When to use: GNS follow up code is 'O' OR there is a GNS hit requiring compliance review.
+### E) Trigger Compliance
+When to use: GNS follow up code is 'O' OR there is a GNS hit.
 Steps:
 1. Go to DotSphere
 2. Select Decision: 'Compliance Docs Received/Trigger Compliance'
@@ -258,39 +412,6 @@ Steps:
 
 ────────────────────────────────────────────────────────────────────────────────
 
-## DECISION LOGIC SUMMARY
-
-IF all checks pass AND all follow-ups = R AND no UW indicators triggered:
-→ Decision A: Standard
-
-IF all checks pass BUT outstanding items exist (missing docs, unresolved follow-ups):
-→ Decision B: Standard with Further Requirements
-
-IF any Jet UW indicator (8C, 8D, 8E, 8F) = Y or M:
-→ Decision C: Refer to UW
-
-IF SA > $6,000:
-→ Decision C: Refer to UW
-
-IF SA > $5,000 AND ANB >= 31:
-→ Decision C: Refer to UW
-
-IF only Claim Ind = Y AND all other indicators = N:
-→ Perform RCS checks (8H)
-  → IF RCS Pass: Decision A (Standard)
-  → IF RCS Refer: Decision C (Refer to UW)
-
-IF C09 follow-up code = 'O' OR fields amended for GNS:
-→ Decision D: Trigger GNS Review
-
-IF GNS follow-up code = 'O' OR GNS hit:
-→ Decision E: Trigger Compliance
-
-IF withdrawal request received:
-→ Decision F: Withdrawal Request Received
-
-────────────────────────────────────────────────────────────────────────────────
-
 ## EXCEPTIONS / KNOWLEDGE GAPS
 
 Flag and log for clarification if any of the following occurs:
@@ -298,9 +419,11 @@ Flag and log for clarification if any of the following occurs:
 - Missing definitions of specific follow-up codes
 - Unclear thresholds or reference lists (e.g., ICD pass/fail list for RCS checks)
 - Multiple client records found with no clear resolution path
+- Any rule/threshold that is missing or unclear — do NOT guess
 
 ## References
-- NTU Processing Steps (rule table / step list)
+- NTU Processing Steps (detailed rule matrix, 30 Mar version)
+- How AI Uses NB Process Matrix (Student Explainer v1)
 - SOP for Jet Criteria for All Plans
-- 03 NBA Master SOP (client information verification)
+- 03 NBA Master SOP
 - 1 - PDD - STP for Clean Cases v2.0
