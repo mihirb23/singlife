@@ -1,6 +1,7 @@
 # claude_service.py
-# handles all the LLM interaction — loading knowledge base docs,
-# building the system prompt, streaming responses, and logging Q&A
+# this is the core of the AI side — loads our SOP docs, builds the prompt,
+# calls claude and streams back responses. also logs every Q&A for the
+# learning loop (US2.4 in our user stories)
 
 import os
 import json
@@ -16,14 +17,15 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=True)
 
 logger = logging.getLogger(__name__)
 
-# paths relative to project root (this file is in backend/services/)
+# knowledge_base/ is at project root, this file is in backend/services/
 KB_DIR = Path(__file__).parent.parent.parent / 'knowledge_base'
 LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 
 def load_knowledge_base() -> tuple[str, List[Dict]]:
-    """reads all .txt files from knowledge_base/ and combines them into
-    one big string that gets injected into the system prompt"""
+    """grab all .txt files from knowledge_base/ and mash them into one big
+    context string. this gets stuffed into the system prompt so claude
+    can reference our SOPs when answering questions"""
     KB_DIR.mkdir(exist_ok=True)
 
     files = sorted(KB_DIR.glob('*.txt'))
@@ -60,8 +62,9 @@ def load_knowledge_base() -> tuple[str, List[Dict]]:
 
 
 def build_system_prompt(knowledge_base: str) -> str:
-    """builds the full system prompt — this is where we define how the AI
-    should behave for SOP evaluation vs general Q&A vs knowledge gap detection"""
+    """constructs the system prompt that defines how the AI behaves.
+    three modes: SOP evaluation, general Q&A, and knowledge gap detection.
+    spent quite a bit of time tuning this to get the output format right"""
     return f"""You are the **Singlife AI Operations Assistant** — an intelligent operations copilot for insurance professionals.
 
 ## Your Capabilities
@@ -150,8 +153,8 @@ When you cannot answer confidently or find missing/unclear rules:
 
 
 def log_qa(question: str, response: str, mode: str = 'chat'):
-    """appends each Q&A pair to a jsonl file so we can review
-    what questions are being asked and spot knowledge gaps"""
+    """save each Q&A pair to a jsonl file. we review these to find
+    recurring questions and spot where the AI struggles (knowledge gaps)"""
     LOG_DIR.mkdir(exist_ok=True)
     log_file = LOG_DIR / 'qa_log.jsonl'
 
@@ -171,8 +174,8 @@ def log_qa(question: str, response: str, mode: str = 'chat'):
 
 
 class InsuranceAssistant:
-    """main class — wraps the anthropic client, manages the knowledge base,
-    and handles streaming chat + case evaluation"""
+    """wraps the anthropic client + knowledge base. handles streaming
+    responses for both chat and case evaluation modes"""
 
     def __init__(self):
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
@@ -199,7 +202,7 @@ class InsuranceAssistant:
                 self.client = None
 
     def reload_knowledge_base(self):
-        """called after uploading/deleting docs so the prompt stays in sync"""
+        """called after uploading/deleting docs so the prompt picks up changes"""
         self.knowledge_base, self.documents = load_knowledge_base()
         self.system_prompt = build_system_prompt(self.knowledge_base)
         logger.info("Knowledge base reloaded")
@@ -208,8 +211,8 @@ class InsuranceAssistant:
         return self.client is not None
 
     def chat_stream(self, messages: list, mode: str = 'chat') -> Iterator[str]:
-        """streams claude's response chunk by chunk (used for both chat and evaluate).
-        also logs the full Q&A after the stream finishes."""
+        """stream response chunks back one at a time. works for both chat
+        and evaluate modes. logs the full exchange after streaming finishes"""
         if not self.client:
             yield (
                 "**Configuration Error:** `ANTHROPIC_API_KEY` is not set or invalid. "
@@ -230,7 +233,7 @@ class InsuranceAssistant:
                     full_response += text
                     yield text
 
-            # grab the last user message for logging
+            # find the last user message so we can log it
             user_msg = ''
             for m in reversed(messages):
                 if m.get('role') == 'user':
@@ -243,7 +246,7 @@ class InsuranceAssistant:
             yield f"\n\n**Error communicating with Claude API:** {str(e)}"
 
     def get_qa_logs(self, limit: int = 50) -> List[Dict]:
-        """reads the jsonl log file and returns the last N entries"""
+        """read the jsonl log and return last N entries"""
         log_file = LOG_DIR / 'qa_log.jsonl'
         if not log_file.exists():
             return []

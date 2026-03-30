@@ -10,7 +10,7 @@
 </head>
 <body>
 
-  <!-- ─── Sidebar ─────────────────────────────────────────────────────────── -->
+  <!-- sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <button class="burger" id="sidebarClose" title="Close sidebar">
@@ -25,7 +25,7 @@
       </button>
     </div>
 
-    <!-- Mode Toggle -->
+    <!-- chat vs evaluate mode toggle -->
     <div class="mode-toggle">
       <button class="mode-btn active" id="modeChatBtn" data-mode="chat">Chat</button>
       <button class="mode-btn" id="modeEvalBtn" data-mode="evaluate">Evaluate Case</button>
@@ -60,7 +60,7 @@
     </div>
   </aside>
 
-  <!-- ─── Main ─────────────────────────────────────────────────────────────── -->
+  <!-- main content -->
   <main class="main" id="main">
 
     <header class="topbar" id="topbar">
@@ -71,10 +71,10 @@
       </button>
     </header>
 
-    <!-- Chat area -->
+    <!-- chat area -->
     <div class="chat-area" id="chatContainer">
 
-      <!-- Welcome -->
+      <!-- welcome screen — shows before any messages -->
       <div class="welcome" id="welcome">
         <span class="welcome-name">Singlife AI Ops</span>
 
@@ -97,11 +97,11 @@
         </div>
       </div>
 
-      <!-- Messages -->
+      <!-- messages go here -->
       <div class="messages" id="messages"></div>
     </div>
 
-    <!-- Bottom input (during chat) -->
+    <!-- input bar that shows at the bottom during active chat -->
     <div class="bottom-input hidden" id="bottomInput">
       <div class="input-bar">
         <button class="attach-btn" id="chatUploadBtn" title="Upload document">

@@ -1,5 +1,6 @@
-# Flask backend for the Singlife AI Ops assistant
-# Handles API routes, file uploads, and streaming responses
+# app.py — main flask server for our AI ops prototype
+# routes for chat, case evaluation, doc uploads etc.
+# NTU x Singlife veNTUre Sprint 2
 
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50mb upload limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50mb max upload
 
 assistant = InsuranceAssistant()
 
@@ -34,7 +35,7 @@ def index():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """streams ai response back to the frontend using SSE"""
+    """stream claude's response back via SSE so we get the typing effect"""
     data = request.get_json(silent=True)
     if not data or 'messages' not in data:
         return jsonify({'error': 'Request body must include a "messages" array'}), 400
@@ -80,7 +81,7 @@ def list_documents():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_document():
-    """handles pdf/txt uploads, extracts text, saves to knowledge_base/"""
+    """upload a pdf or txt, extract the text, dump it into knowledge_base/"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
@@ -114,7 +115,7 @@ def upload_document():
     else:
         return jsonify({'error': 'Unsupported file type. Upload a .pdf or .txt file.'}), 400
 
-    # slugify filename and save
+    # clean up the filename so it doesn't break anything
     KB_DIR.mkdir(exist_ok=True)
     slug = re.sub(r'[^a-z0-9]+', '_', Path(filename).stem.lower()).strip('_')
     out_path = KB_DIR / f"{slug}.txt"
@@ -139,14 +140,14 @@ def upload_document():
 
 @app.route('/api/evaluate', methods=['POST'])
 def evaluate_case():
-    """takes case data json, builds an eval prompt, and streams the SOP check result"""
+    """user pastes case data (json or text), we build a prompt and run it thru the SOP checklist"""
     data = request.get_json(silent=True)
     if not data or 'caseData' not in data:
         return jsonify({'error': 'Request body must include "caseData"'}), 400
 
     case_data = data['caseData']
 
-    # construct the prompt that tells the LLM to run through every SOP step
+    # build the eval prompt — tells claude to check every SOP step
     eval_prompt = (
         "Evaluate the following case against SOP-NBIG-STP-001 (New Business Pre-Issue Checks & Decisioning). "
         "Go through EVERY applicable step in the SOP checklist. "
@@ -177,7 +178,7 @@ def evaluate_case():
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
-    """returns recent Q&A logs — used for the learning loop / gap analysis"""
+    """pull recent Q&A logs — we use this to find patterns and knowledge gaps"""
     limit = request.args.get('limit', 50, type=int)
     logs = assistant.get_qa_logs(limit=limit)
     return jsonify({'logs': logs, 'total': len(logs)})
@@ -185,7 +186,7 @@ def get_logs():
 
 @app.route('/api/documents/<filename>', methods=['DELETE'])
 def delete_document(filename):
-    # prevent path traversal by resolving and checking prefix
+    # basic path traversal check — don't want anyone deleting files outside kb
     file_path = (KB_DIR / filename).resolve()
     if not str(file_path).startswith(str(KB_DIR.resolve())):
         return jsonify({'error': 'Invalid filename'}), 400

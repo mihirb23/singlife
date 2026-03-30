@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# quick script to extract text from a policy PDF and save it
-# to knowledge_base/ so the AI assistant picks it up on restart
+# add_policy.py — extracts text from a PDF and drops it into knowledge_base/
+# handy for quickly adding new SOPs or policy docs without going thru the UI
 #
 # usage:
 #   python scripts/add_policy.py "some_policy.pdf"
@@ -59,7 +59,7 @@ def main():
     if not out_name:
         out_name = "policy"
 
-    # knowledge_base/ is at the project root (one level up from scripts/)
+    # knowledge_base/ is one level up from scripts/
     kb_dir = Path(__file__).parent.parent / 'knowledge_base'
     kb_dir.mkdir(exist_ok=True)
     out_path = kb_dir / f"{out_name}.txt"

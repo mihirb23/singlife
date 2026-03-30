@@ -1,15 +1,16 @@
-// app.js — frontend logic for the Singlife AI Ops assistant
-// handles chat UI, streaming responses, mode switching, doc uploads
+// app.js — handles all the frontend stuff: chat UI, streaming, mode switching, uploads
+// pretty much a single-page app without any framework, just vanilla js
+// NTU x Singlife veNTUre project
 
 const API_BASE = '';
 
-// state
+// app state — conversations persist in localStorage between sessions
 let conversations = JSON.parse(localStorage.getItem('sl_convos') || '[]');
 let activeId = null;
 let isStreaming = false;
 let currentMode = 'chat'; // 'chat' or 'evaluate'
 
-// grab all the dom elements we need
+// dom refs
 const chatContainer  = document.getElementById('chatContainer');
 const messagesEl     = document.getElementById('messages');
 const welcomeEl      = document.getElementById('welcome');
@@ -38,10 +39,11 @@ const modeEvalBtn    = document.getElementById('modeEvalBtn');
 const modeLabelEl    = document.getElementById('modeLabel');
 const chatModeLabelEl = document.getElementById('chatModeLabel');
 
-// markdown renderer config
 marked.setOptions({ breaks: true, gfm: true });
 
-// -- mode toggle (chat vs evaluate) --
+// -- mode toggle --
+// chat mode = ask questions about SOPs
+// evaluate mode = paste case data json and get SOP evaluation
 
 function setMode(mode) {
   currentMode = mode;
@@ -64,7 +66,7 @@ function setMode(mode) {
 modeChatBtn.addEventListener('click', () => setMode('chat'));
 modeEvalBtn.addEventListener('click', () => setMode('evaluate'));
 
-// -- sidebar --
+// -- sidebar open/close --
 
 function setSidebar(open) {
   if (open) {
@@ -79,7 +81,7 @@ function setSidebar(open) {
 sidebarOpenEl.addEventListener('click', () => setSidebar(true));
 sidebarCloseEl.addEventListener('click', () => setSidebar(false));
 
-// -- status check --
+// -- check if the backend + AI is online --
 
 async function checkStatus() {
   try {
@@ -99,7 +101,7 @@ async function checkStatus() {
   }
 }
 
-// -- document list + upload --
+// -- document list + upload handling --
 
 function renderDocumentList(documents) {
   docListEl.innerHTML = '';
@@ -123,7 +125,7 @@ function renderDocumentList(documents) {
     docListEl.appendChild(el);
   });
 
-  // wire up delete buttons
+  // hook up delete buttons
   docListEl.querySelectorAll('.doc-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -175,7 +177,8 @@ fileInputEl.addEventListener('change', () => {
   if (fileInputEl.files.length > 0) { uploadFile(fileInputEl.files[0]); fileInputEl.value = ''; }
 });
 
-// -- conversation management (stored in localStorage) --
+// -- conversation management --
+// everything stored in localStorage so chats survive page refresh
 
 function save() { localStorage.setItem('sl_convos', JSON.stringify(conversations)); }
 function getActive() { return conversations.find(c => c.id === activeId) || null; }
@@ -250,7 +253,7 @@ function updateTitle(id, msg) {
   if (c) { c.title = msg.length > 44 ? msg.slice(0, 44) + '\u2026' : msg; save(); renderConvList(); }
 }
 
-// -- welcome screen vs chat view --
+// -- welcome screen vs chat --
 
 function showWelcome() {
   welcomeEl.style.display = 'flex';
@@ -263,7 +266,7 @@ function hideWelcome() {
   chatInputEl.focus();
 }
 
-// -- message rendering --
+// -- rendering messages --
 
 function renderMessages(msgs) {
   messagesEl.innerHTML = '';
@@ -284,7 +287,7 @@ function appendMessage(role, content, streaming = false) {
     return null;
   }
 
-  // assistant message with avatar
+  // assistant message — has avatar + rendered markdown
   const hdr = document.createElement('div');
   hdr.className = 'msg-header';
   hdr.innerHTML = `
@@ -310,7 +313,8 @@ function appendMessage(role, content, streaming = false) {
   return streaming ? body : null;
 }
 
-// -- send message (handles both chat and evaluate modes) --
+// -- sending messages --
+// handles both chat and evaluate modes, streams response via SSE
 
 async function sendMessage(text) {
   if (isStreaming || !text.trim()) return;
@@ -329,7 +333,7 @@ async function sendMessage(text) {
   appendMessage('user', userText);
   scrollToBottom();
 
-  // clear inputs and disable while streaming
+  // disable inputs while streaming
   userInputEl.value = '';
   chatInputEl.value = '';
   autoResize(userInputEl);
@@ -345,17 +349,17 @@ async function sendMessage(text) {
   let first = true;
 
   try {
-    // pick endpoint based on current mode
+    // pick endpoint based on mode
     let endpoint = `${API_BASE}/api/chat`;
     let payload = { messages: conv.messages, mode: currentMode };
 
-    // in evaluate mode, try parsing input as json for the case data
+    // in evaluate mode, try to parse input as JSON for the case data
     if (currentMode === 'evaluate') {
       let caseData = userText;
       try {
         caseData = JSON.parse(userText);
       } catch {
-        // not json, just send as plain text
+        // not valid json, just send as plain text — claude can handle it
       }
       endpoint = `${API_BASE}/api/evaluate`;
       payload = { caseData, messages: conv.messages.slice(0, -1) };
@@ -374,7 +378,7 @@ async function sendMessage(text) {
 
     if (!resp.body) throw new Error('No response body');
 
-    // read the SSE stream
+    // read the SSE stream chunk by chunk
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -426,7 +430,7 @@ function scrollToBottom() {
   requestAnimationFrame(() => { chatContainer.scrollTop = chatContainer.scrollHeight; });
 }
 
-// -- event listeners --
+// -- wire up event listeners --
 
 userInputEl.addEventListener('input', () => {
   autoResize(userInputEl);
@@ -448,7 +452,7 @@ chatSendBtnEl.addEventListener('click', () => sendMessage(chatInputEl.value));
 
 newChatBtnEl.addEventListener('click', () => newConversation());
 
-// -- init --
+// -- init on page load --
 
 (function init() {
   checkStatus();
