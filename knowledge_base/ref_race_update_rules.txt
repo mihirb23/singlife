@@ -1,0 +1,56 @@
+# Race Field Update Rules (OTH to Correct Value)
+# Referenced by: Step 5B in SOP-NBIG-STP-001
+
+## Purpose
+Documents the rule for updating the Race field in L400 when it defaults to 'OTH' (Other)
+but the supporting document shows a specific race. Step 5B is currently marked NO for ALL
+channels — this reference is provided for completeness.
+
+## Current Status
+- Step 5B: QnB=NO, EzSub=NO, Hardcopy=NO
+- AI should SKIP this step for all channels in Sprint 2 scope
+- AI role is Evaluate only — NEVER execute the update
+
+## The Problem
+- L400 often defaults the Race field to 'OTH' (Other) for new client records
+- This is a system default, not the actual race of the client
+- The correct race should be taken from identity documents (NRIC, MyInfo)
+
+## Race Codes in L400
+| Code | Description |
+|------|-------------|
+| CHI | Chinese |
+| MAL | Malay |
+| IND | Indian |
+| EUR | Eurasian |
+| OTH | Other (default) |
+
+## Update Rule
+IF:
+  - L400 Race field = 'OTH' (Other)
+  - AND supporting document (NRIC/MyInfo) shows a specific race (e.g., 'CHI')
+THEN:
+  - AI recommends update: "Recommend updating Race from OTH to [correct value]"
+  - Human processor executes the update on L400
+  - Decision Impact: None (this does not affect the case decision)
+
+## Important Constraints
+1. AI must NEVER directly modify the Race field — recommend only
+2. This is a "Human-only" step per the Processing Steps matrix
+3. No decision impact — race does not affect premium or underwriting outcome
+4. If document does not show race, do NOT guess — leave as OTH
+
+## Why Race Is Updated
+- Data quality: 'OTH' is a system default, not accurate client data
+- Reporting: Demographic reporting requires accurate race classification
+- No regulatory or premium impact for CareShield products
+
+## When AI Encounters This in Data
+- In UAT data: Race field from L400 screen shows "OTH" for test client (Client No: 55167349)
+- The Client Underwriting Enquiries screen shows "Race: OTH"
+- If identity document confirms race as Chinese → recommend "Update Race from OTH to CHI"
+
+## References
+- Step 5B in SOP-NBIG-STP-001
+- ref_field_validation_reasons.txt (Race Field section)
+- L400 Client Underwriting Enquiries screen

@@ -1,0 +1,106 @@
+# L400 / UAT Data Column-to-Field Mapping
+# Maps raw UAT extraction column names to logical field names used by the AI rules engine
+
+## Purpose
+The UAT data extracted from L400 via Power Automate uses specific column names that
+differ from the logical field names in the SOP. This mapping ensures the rules engine
+can normalize any data format (UAT export, test JSON, or API response).
+
+## Column Mapping Table
+
+### Case Identifiers
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| CONTRACTNO | contract_no | Policy/contract number | G0401259 |
+| CNTTYPE | cnt_type / plan_code | Plan code | EYA, EYB |
+| CHANNEL | channel | Submission channel | QnB, EzSub |
+| SUBMISSION_DATIME | submission_date | Application submission timestamp | 2025-11-20 17:25:23.977387 |
+| CLIENTNO | client_no | L400 client number | 55164576 |
+
+### Submission (Application) Fields — prefix: SUB_
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| SUB_SECUITYNO | sub_nric | NRIC/FIN from submission | S0287421J |
+| SUB_SURNAME | sub_surname | Family name from submission | Ong |
+| SUB_GIVNAME | sub_given_name | Given name from submission | Cs Eden |
+| SUB_CLTSEX | sub_sex | Gender from submission | F, M |
+| SUB_CLTDOB | sub_dob | Date of birth from submission | 19870512 (YYYYMMDD) |
+| SUB_NATLTY | sub_nationality | Nationality code from submission | SG, MY |
+
+### Current L400 Record Fields — prefix: CURR_
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| CURR_SECUITYNO | l400_nric | NRIC/FIN in L400 | S0287421J |
+| CURR_SURNAME | l400_surname | Family name in L400 | Ong |
+| CURR_GIVNAME | l400_given_name | Given name in L400 | Cs Eden |
+| CURR_CLTSEX | l400_sex | Gender in L400 | F, M |
+| CURR_CLTDOB | l400_dob | Date of birth in L400 | 19870512 (YYYYMMDD) |
+| CURR_NATLTY | l400_nationality | Nationality code in L400 | SG, MY |
+| CURR_NATIONALITY | l400_nationality_full | Full nationality name | Singapore, Malaysia |
+
+### Address Fields (from L400)
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| CLTADDR01 | l400_address_line1 | Block/Street (Line 1) | 106B |
+| CLTADDR02 | l400_address_line2 | Street name (Line 2) | Jalan Deckow Way |
+| CLTADDR03 | l400_address_line3 | Unit number (Line 3) | #17-120 |
+| CLTADDR04 | l400_address_line4 | Building name (Line 4) | Regent Grove |
+| CLTADDR05 | l400_address_line5 | Additional address (Line 5) | |
+| CLTPCODE | l400_postcode | Postal code | 684322 |
+| CTRYCODE | l400_country | Country code | SG |
+
+### Contact Fields
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| TLXNO | l400_phone | Mobile/phone number | 82020504 |
+| ZEMAILADD | l400_email | Email address | (often blank in QnB data) |
+
+### Follow-Up Codes
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| FUPCODE | followup_code | Follow-up code | CSL, F45, C09, AT3 |
+| FUPSTAT | followup_status | Follow-up status | O (Outstanding), R (Resolved) |
+
+Note: In UAT extraction, each follow-up code appears as a SEPARATE ROW for the same
+contract. The rules engine aggregates these into a list:
+  [{"code": "CSL", "status": "O"}, {"code": "F45", "status": "R"}]
+
+### Underwriting Fields
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| ANB_AT_CCD | anb | Age Next Birthday at CCD | 39 |
+| (from UW screen) | total_sa | Total Aggregate SA | 8000.00 |
+| (from UW screen) | uw_sub_std | UW Sub-standard indicator | N, Y, M, A |
+| (from UW screen) | decline | Decline indicator | N, Y, M, A |
+| (from UW screen) | postpone | Postpone indicator | N, Y, M, A |
+| (from UW screen) | claim_ind | Claim indicator | N, Y, M, A |
+
+### Other Fields
+| UAT Column | Logical Field | Description | Example |
+|-----------|---------------|-------------|---------|
+| MAILING | mailing_flag | Mailing address same | Y, N |
+| CLTMCHG | client_match_change | Client match change flag | Y, N |
+
+## Date Formats
+- L400 DOB: YYYYMMDD (e.g., 19870512 = 12 May 1987)
+- Submission datetime: YYYY-MM-DD HH:MM:SS.ffffff
+- The rules engine normalizes all dates to YYYY-MM-DD for comparison
+
+## Nationality Codes
+| Code | Full Name |
+|------|-----------|
+| SG | Singapore |
+| MY | Malaysia |
+| (others as encountered) | |
+
+## Key Observations from UAT Data
+- QnB data: SUB_ and CURR_ fields are almost always identical (auto-populated)
+- EzSub data: SUB_ may differ from CURR_ due to manual entry
+- Some QnB records show name differences (e.g., "Andika Bin Taufan" vs "Andika bin Taufan" — case sensitivity)
+- Client 55167349 is the mock test client matching the QnB Application Form PDF (NRIC: S8483123I, LONG QUAN ZHI)
+- Multiple contracts can exist for the same CLIENTNO (e.g., 55142164 has 8+ applications)
+
+## References
+- UAT Data - QNB LTC extraction (source spreadsheet)
+- UAT_case_level_student_example.json (simplified test format)
+- rules_engine.py normalize_case() function

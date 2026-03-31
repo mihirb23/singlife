@@ -1,0 +1,99 @@
+# CareShield Product Reference
+
+## Purpose
+Product details for Singlife CareShield Standard (EYA) and Singlife CareShield Plus (EYB). The AI uses this to validate application data and answer product-related questions.
+
+## Plan Codes
+- EYA: Singlife CareShield Standard
+- EYB: Singlife CareShield Plus
+
+## Eligibility Requirements
+1. Life Assured must be covered under basic ElderShield or CareShield Life policy
+2. Applicant must be below 62 years old
+3. Must be Singapore Resident (resided in Singapore for more than 183 days in the last 12 months)
+4. Must be proficient in both spoken and written English
+5. Must have attained at least GCE 'O' level or 'N' level certification (or equivalent)
+6. This Supplement can also be purchased by ElderShield (ESH) policyholders
+7. All Supplements are regulated under the CareShield Life and Long-Term Care Act
+
+## Premium Structure
+- Annual premium of up to S$600 is payable by MediSave
+- Maximum MediSave deduction: S$600 per life assured per calendar year
+- Premium in excess of S$600 must be paid by credit card or cash
+- Premium is based on selected plan and entry age
+- Benefit Payout Structures: Level or Escalating (fixed escalation rate, cannot change after inception)
+
+## Payment Methods (Section C of Application Form)
+- CPF MediSave Account: Up to S$600 per calendar year
+- Credit Card (Visa/Mastercard): For premium in excess of S$600
+- If policy is backdated, may need 2 premium deductions in same calendar year (may exceed S$600 MediSave limit)
+
+## Application Form Sections
+- Section A: Particulars of Life Assured (Name, NRIC, DOB, Address, Nationality, Contact, Income)
+- Section B: Health Questions (2 main questions about pre-existing conditions and daily living activities)
+- Section C: Premium Payment Method (MediSave + Credit Card split)
+- Section D: Declaration (eligibility, switching warnings, data consent)
+- Section E: Personal Data Consent (PDPA)
+- Section F: E-Documents preference
+
+## Health Questions (Section B) — Determines STP Eligibility
+Question 1 - Have you ever had:
+a) cancer, diabetes, stroke, AIDS or HIV infection
+b) dementia, Alzheimer's, Parkinson's, multiple sclerosis, motor neurone disease
+c) heart disease (heart attack, narrowing of heart artery, disease of heart muscle)
+d) liver disease (cirrhosis, hepatitis C, liver failure, alcoholic liver disease)
+e) kidney disease (chronic kidney disease, kidney failure)
+f) lung disease (COPD, sarcoidosis, bronchiectasis)
+g) high blood pressure
+
+Question 2 - Have you ever:
+a) had conditions requiring medication for >14 days or regular medical treatment
+b) had recurring symptoms yet to seek medical advice
+c) needed assistance for daily activities (washing, dressing, feeding, toileting, walking, transferring)
+d) experienced drop in domestic/social abilities in last 12 months
+
+If ALL answers are No: eligible for STP (subject to Jet UW checks)
+If ANY answer is Yes: requires further underwriting review
+
+## 6 Activities of Daily Living (ADL) Definition
+1. Washing: Ability to wash in bath/shower
+2. Dressing: Ability to put on/take off garments
+3. Feeding: Ability to feed oneself prepared food
+4. Toileting: Ability to use lavatory or manage bowel/bladder
+5. Walking or Moving Around: Ability to move indoors room to room on level surfaces
+6. Transferring: Ability to move from bed to chair and vice versa
+
+## Free-Look Period
+- 60 days after receiving the policy to terminate if not suitable
+- Singlife may recover underwriting expenses
+
+## Important Warnings
+- Anyone insured under CareShield Standard/Plus is NOT eligible for Additional Premium Support (APS) from Government
+- If currently receiving APS for MediShield Life/CareShield Life, choosing this plan stops APS
+- This applies even if someone else is paying for the policy
+
+## Channel: QnB (Direct Purchase)
+- FAR Name: DIRECT MARKETING (Source Code: 60003819)
+- No financial adviser representative involved
+- Customer self-selects plan and premium on website
+- Customer declares they bought without advice from FAR
+
+## Key Data Fields from Application Form
+| Field | Source | Example |
+|-------|--------|---------|
+| Family Name | Application Form | LONG |
+| Given Name | Application Form | QUAN ZHI |
+| NRIC | Application Form | S8483123I |
+| DOB | Application Form | 08/08/1988 |
+| Gender | Application Form | M |
+| Address | Application Form | 88 Singapore Road #08-08, 370088 |
+| Nationality | Application Form | SINGAPORE |
+| Mobile | Application Form | 98765432 |
+| Email | Application Form | quanzhilong@gmail.com |
+| Plan | Application Form | CareShield Standard (EYA) |
+| Monthly Benefit | Application Form | S$3,000.00 |
+| Annual Premium | Application Form | S$1,584.35 |
+| Premium Structure | Application Form | Level |
+| Premium Term | Application Form | 31 years (until ANB 69) |
+| MediSave portion | Section C | S$600.00 |
+| Credit Card portion | Section C | S$984.35 |

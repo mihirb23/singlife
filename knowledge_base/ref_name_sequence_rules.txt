@@ -1,0 +1,67 @@
+# Client Name Sequence Rules
+# Referenced by: Step 5A in SOP-NBIG-STP-001
+
+## Purpose
+Explains the correct name sequence format expected by L400 and how to validate
+client names against MyInfo data. Step 5A is currently marked NO for ALL channels
+(QnB, EzSub, Hardcopy) — this reference is provided for completeness and potential
+future use.
+
+## Current Status
+- Step 5A: QnB=NO, EzSub=NO, Hardcopy=NO
+- AI should SKIP this step for all channels in Sprint 2 scope
+- This document exists for reference only (knowledge completeness)
+
+## Name Format in L400
+L400 stores client names in two fields:
+- SURNAME (Family Name): e.g., "LONG", "ONG", "LEE"
+- GIVNAME (Given Name): e.g., "QUAN ZHI", "CS EDEN", "CS SAGE"
+
+## Name Format in MyInfo
+MyInfo returns name fields as verified by government records (NRIC registration):
+- Name as per NRIC/Passport (single field, full name)
+- Name components may differ from L400 split
+
+## Name Sequence Matching Rules
+
+### For Chinese/Malay/Indian Names
+The name sequence in L400 should match the order on the MyInfo consent form:
+- Chinese: Surname + Given Name (e.g., "LONG QUAN ZHI")
+- Malay: Given Name + bin/binte + Father's Name (e.g., "FAIZA HASSAN bte MOHAMAD ANUAR")
+- Indian: Given Name + s/o or d/o + Father's Name (e.g., "KUMAR s/o RAJAN")
+
+### What "Mismatch" Means
+A name sequence mismatch occurs when:
+- Surname and Given Name are swapped in L400 vs MyInfo
+- Name components are in different order
+- Middle name placement differs
+- Prefix/suffix (bin, bte, s/o, d/o) is in the wrong field
+
+### What "Match" Means
+Names are considered matching if:
+- Same characters in both systems (case-insensitive)
+- Same logical order (Surname then Given Name)
+- Minor formatting differences are acceptable (spaces, casing)
+
+## Why This Step Is Skipped (All Channels = NO)
+- Name sequence is typically correct from system auto-population
+- Fixing name sequence requires human judgement (cultural naming conventions)
+- Low-risk field — does not affect premium, compliance, or claim eligibility
+- AI cannot reliably judge name ordering across different cultural conventions
+
+## AI Behaviour
+- If Step 5A is evaluated in future: AI should compare L400 name fields against
+  MyInfo name fields for order consistency
+- AI should NOT attempt to reorder names — recommend human review only
+- Flag any case where name fields appear completely different (possible wrong client)
+
+## Data Source Mapping
+| Field | System | Column |
+|-------|--------|--------|
+| Surname (L400) | L400 | SUB_SURNAME / CURR_SURNAME |
+| Given Name (L400) | L400 | SUB_GIVNAME / CURR_GIVNAME |
+| Full Name (MyInfo) | MyInfo Consent Form | Name as per NRIC |
+
+## References
+- Step 5A in SOP-NBIG-STP-001
+- Processing Steps matrix (30 Mar version), Row: Client Info / 5A

@@ -1,0 +1,83 @@
+# CareShield Premium Calculation Reference
+# Referenced by: Steps 6A-6I in SOP-NBIG-STP-001
+
+## Purpose
+Reference information for premium validation in Contract Information Checks.
+Steps 6A-6I are currently marked NA for all channels (QnB, EzSub, Hardcopy) —
+premium checks are handled by the system, not by AI. This reference is provided
+for completeness and to support Q&A queries about premium structure.
+
+## Current Status
+- Steps 6A, 6E, 6F, 6G, 6H, 6I: QnB=NA, EzSub=NA, Hardcopy=NA
+- AI should SKIP all contract information checks in Sprint 2 scope
+- This document supports knowledge Q&A only, not rule evaluation
+
+## Premium Factors for CareShield Plans
+
+### Factors That Affect Premium
+1. **Plan Type**: EYA (CareShield Standard) vs EYB (CareShield Plus)
+2. **Entry Age (ANB)**: Age Next Birthday at policy inception — primary pricing factor
+3. **Gender**: Male vs Female — different premium tables
+4. **Monthly Benefit Amount**: Higher benefit = higher premium
+5. **Benefit Structure**: Level vs Escalating (escalating premiums increase annually)
+6. **Premium Term**: Number of years premiums are payable (until ANB 69)
+
+### Factors That Do NOT Affect Premium
+- Race, nationality, occupation (for CareShield supplements)
+- Address, email, phone number
+- Income level (though collected on form)
+
+## Premium Payment Split
+Total Annual Premium = MediSave Portion + Out-of-Pocket Portion
+
+- MediSave maximum: S$600 per life assured per calendar year
+- Out-of-pocket: Paid via credit card (Visa/Mastercard) or cash
+
+### Example from QnB Application Form (Mock Data)
+| Field | Value |
+|-------|-------|
+| Plan | CareShield Standard (EYA) |
+| Monthly Benefit | S$3,000.00 |
+| Benefit Structure | Level |
+| Annual Premium (incl. GST) | S$1,584.35 |
+| Premium Term | 31 years (until ANB 69) |
+| MediSave Portion | S$600.00 |
+| Credit Card Portion | S$984.35 |
+| Applicant DOB | 08/08/1988 |
+| Gender | M |
+| ANB at inception | 38 |
+
+## When Premium Mismatch Occurs (Step 6A)
+Possible reasons for premium amount not matching between L400 and Application Form:
+1. **Birthday crossover** (Step 6E): If application is processed after client's birthday,
+   ANB changes and premium changes
+2. **Backdating** (Step 6F/6G): If policy is backdated to before birthday, premium should
+   use pre-birthday ANB
+3. **Gender/DOB error** (Step 6H): If Gender or DOB was entered incorrectly in Lives
+   Assured page, premium will be wrong
+4. **Campaign code** (Step 6H): Promotional discounts may affect premium
+5. **GST changes**: Premium includes GST — rate changes affect total
+
+## Birthday Crossover Logic (Step 6E)
+- ANB = Age Next Birthday = current age + 1 (on or after birthday in the year)
+- If application submitted before birthday but processed after birthday:
+  - ANB increases by 1
+  - Premium increases to next age band
+  - Backdating may be needed to use original lower premium
+
+## ERI Check (Step 6F)
+- ERI = Earliest Risk Inception
+- Rule: Basic plan start date must be BEFORE the backdated/inception date
+- If invalid: Block Decision — cannot proceed until dates are corrected
+
+## Payment Mode Validation (Step 6I)
+Check that the payment mode on L400 matches Section C of the PROPF (Application Form):
+- Billing Frequency: Annual (01), Semi-Annual (02), Quarterly (04), Monthly (12)
+- Billing Channel: B = Bank (GIRO), D = Direct (Credit Card/Cash)
+- MediSave + Credit Card split must match form declaration
+
+## References
+- Steps 6A-6I in SOP-NBIG-STP-001
+- ref_careshield_product.txt (product details and premium structure)
+- QnB Application Form (Section C: Premium Payment Method)
+- UAT Data - QNB LTC extraction (actual premium data)

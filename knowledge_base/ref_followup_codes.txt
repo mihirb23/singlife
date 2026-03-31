@@ -120,11 +120,52 @@ LOW FREQUENCY CODES (appeared 1-2 times):
   B31   — Benefit Review 31 (1 occurrence)
 
 ====================================================================
+CRITICAL FOLLOW-UP CODES — DETAILED BUSINESS DEFINITIONS
+====================================================================
+
+These codes have specific decision-path implications in the SOP:
+
+CSL — Customer Clarification Required
+  Trigger: Raised when customer information is incomplete or needs verification
+  Action to resolve: Customer must provide clarification or missing info
+  Impact on decision: If status = O (Outstanding) → Further Requirements
+  Frequency: Appears on nearly every QnB CareShield case in UAT data
+  Resolution: Status changes to R when clarification received and verified
+  Who resolves: Ops processor (with customer response)
+
+C09 — Compliance / GNS Re-screening Required
+  Trigger: Raised when Government Name Screening (GNS) check is needed,
+           OR when client fields are amended that require compliance re-check
+  Action to resolve: GNS screening must be completed
+  Impact on decision: If status = O → Trigger GNS Review (Decision D)
+                      If GNS hit found → Trigger Compliance (Decision E)
+  Resolution: Status changes to R when GNS screening completes clean
+  Who resolves: Compliance team
+  IMPORTANT: C09 = O drives a DIFFERENT decision path than other FUP codes.
+             Other codes with O → Further Requirements, but C09 with O → GNS/Compliance
+
+F45 — Premium Mismatch Detected
+  Trigger: System detects premium amount discrepancy between proposal and L400
+  Action to resolve: Investigate cause (birthday crossover, gender/DOB error,
+                     campaign code, backdating needed)
+  Impact on decision: If status = O → Further Requirements (premium analysis needed)
+  Frequency: 53 occurrences in NB.MASTER (most common FUP code)
+  Resolution: Status changes to R when premium is reconciled
+  Who resolves: Ops processor (may need system correction)
+
+AT3 — Additional Requirement Pending
+  Trigger: Additional documentation or information required from customer/advisor
+  Action to resolve: Specified additional requirements must be fulfilled
+  Impact on decision: If status = O → Further Requirements
+  Resolution: Status changes to R when requirement is met
+  Who resolves: Ops processor (with customer/advisor response)
+
+====================================================================
 KEY FOLLOW-UP CODE CATEGORIES
 ====================================================================
 
 PREMIUM/FINANCIAL:
-  F45 — Premium mismatch
+  F45 — Premium mismatch (see detailed definition above)
   F92 — Financial follow-up
 
 UNDERWRITING:

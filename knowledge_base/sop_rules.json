@@ -1,0 +1,237 @@
+{
+  "sop_id": "SOP-NBIG-STP-001",
+  "version": "Sprint 2 — 2026-03-30",
+  "description": "New Business Pre-Issue Checks & Decisioning rules config",
+
+  "channel_gating": {
+    "QnB": {
+      "1A": "N", "1B": "N", "1C": "N",
+      "2A": "N",
+      "3A": "N",
+      "4A": "Y", "4B": "Y", "4C": "N",
+      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
+      "7A": "Y", "7B": "Y", "7C": "N",
+      "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
+      "9A": "Y"
+    },
+    "EzSub": {
+      "1A": "Y", "1B": "Y", "1C": "Y",
+      "2A": "Y",
+      "3A": "Y",
+      "4A": "Y", "4B": "Y", "4C": "Y",
+      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
+      "7A": "Y", "7B": "Y", "7C": "N",
+      "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
+      "9A": "Y"
+    },
+    "Hardcopy": {
+      "1A": "Y", "1B": "Y", "1C": "Y",
+      "2A": "Y",
+      "3A": "Y",
+      "4A": "Y", "4B": "Y", "4C": "Y",
+      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
+      "7A": "Y", "7B": "Y", "7C": "N",
+      "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
+      "9A": "Y"
+    }
+  },
+
+  "steps": {
+    "1A": {
+      "description": "Open Identity Document on FileNet",
+      "category": "Open Documents",
+      "rule": "document_exists",
+      "document": "identity_doc",
+      "pass_condition": "Identity document exists in FileNet",
+      "fail_impact": "Further Requirements"
+    },
+    "1B": {
+      "description": "Open Benefit Illustration on FileNet",
+      "category": "Open Documents",
+      "rule": "document_exists",
+      "document": "benefit_illustration",
+      "pass_condition": "Benefit Illustration exists and is readable",
+      "fail_impact": "Further Requirements"
+    },
+    "1C": {
+      "description": "Open Application Form on DotSphere",
+      "category": "Open Documents",
+      "rule": "document_exists",
+      "document": "application_form",
+      "pass_condition": "Application Form exists for comparison",
+      "fail_impact": "Further Requirements"
+    },
+    "2A": {
+      "description": "Check MyInfo Consent Form Timestamp validity",
+      "category": "Document Checks",
+      "rule": "consent_timestamp",
+      "max_age_days": 365,
+      "pass_condition": "MyInfo consent timestamp within 1 year of application date",
+      "fail_impact": "Further Requirements"
+    },
+    "3A": {
+      "description": "Search client on L400 using NRIC/License",
+      "category": "Client Number Search",
+      "rule": "client_search_nric",
+      "pass_condition": "Exactly 1 client record found by NRIC",
+      "fail_impact": "Refer Ops"
+    },
+    "4A": {
+      "description": "Search client by Surname + Given Name",
+      "category": "Duplicate Client Checks",
+      "rule": "client_record_found",
+      "pass_condition": "Client record exists on L400",
+      "fail_impact": "Refer Ops"
+    },
+    "4B": {
+      "description": "Check DOB and Sex vs Application Form",
+      "category": "Duplicate Client Checks",
+      "rule": "field_match",
+      "fields": ["dob", "sex"],
+      "pass_condition": "Both DOB and Sex match between L400 and application",
+      "fail_impact": "Refer Ops"
+    },
+    "5C": {
+      "description": "Validate key client fields",
+      "category": "Client Information Checks",
+      "rule": "field_match",
+      "fields": ["sex", "nationality", "nric", "dob", "name"],
+      "pass_condition": "All key fields match between L400 and application",
+      "fail_impact": "Further Requirements"
+    },
+    "7B": {
+      "description": "Check if all follow-ups are R (Resolved)",
+      "category": "Follow-Up Code Checks",
+      "rule": "all_followups_resolved",
+      "pass_condition": "All follow-up codes have status R",
+      "fail_impact": "Further Requirements"
+    },
+    "8B": {
+      "description": "Check ANB and Total Aggregate SA",
+      "category": "Jet Underwriting",
+      "rule": "threshold_check",
+      "thresholds": [
+        { "condition": "sa > 6000", "result": "Refer UW", "label": "SA exceeds $6,000" },
+        { "condition": "anb >= 31 and sa > 5000", "result": "Refer UW", "label": "ANB >= 31 and SA exceeds $5,000" }
+      ],
+      "pass_condition": "SA within Jet UW STP limits for ANB band",
+      "fail_impact": "Refer UW"
+    },
+    "8C": {
+      "description": "Check UW Sub-std",
+      "category": "Jet Underwriting",
+      "rule": "uw_indicator",
+      "field": "uw_sub_std",
+      "label": "UW Sub-std",
+      "pass_values": ["N", "A", ""],
+      "fail_values": ["Y", "M"],
+      "fail_impact": "Refer UW"
+    },
+    "8D": {
+      "description": "Check Decline",
+      "category": "Jet Underwriting",
+      "rule": "uw_indicator",
+      "field": "decline",
+      "label": "Decline",
+      "pass_values": ["N", "A", ""],
+      "fail_values": ["Y", "M"],
+      "fail_impact": "Refer UW"
+    },
+    "8E": {
+      "description": "Check Postpone",
+      "category": "Jet Underwriting",
+      "rule": "uw_indicator",
+      "field": "postpone",
+      "label": "Postpone",
+      "pass_values": ["N", "A", ""],
+      "fail_values": ["Y", "M"],
+      "fail_impact": "Refer UW"
+    },
+    "8F": {
+      "description": "Check Claim Ind",
+      "category": "Jet Underwriting",
+      "rule": "uw_indicator",
+      "field": "claim_ind",
+      "label": "Claim Ind",
+      "pass_values": ["N", "A", ""],
+      "fail_values": ["Y", "M"],
+      "fail_impact": "Refer UW"
+    },
+    "8G": {
+      "description": "Check if only Claim Ind = Y (all others N)",
+      "category": "Jet Underwriting",
+      "rule": "rcs_trigger",
+      "trigger_field": "claim_ind",
+      "other_fields": ["uw_sub_std", "decline", "postpone"],
+      "pass_condition": "Only Claim Ind flagged — RCS check required",
+      "fail_impact": "Refer UW"
+    }
+  },
+
+  "decision_mapping": {
+    "Standard": {
+      "condition": "All applicable steps Pass and no outstanding follow-ups",
+      "workflow_action": "Decision Locked with No Further Requirements",
+      "human_review": false,
+      "dotsphere_steps": [
+        "Go to Underwriting Decision Update screen on L400",
+        "Set Proposal Accepted = Y",
+        "Set Print Acceptance Letter = B",
+        "Go to DotSphere",
+        "Select Decision: Decision Locked with No Further Requirements"
+      ]
+    },
+    "StandardWithFurtherRequirements": {
+      "condition": "Any doc missing OR PF not all R OR unresolved data mismatch",
+      "workflow_action": "Trigger follow-up / pending requirements",
+      "human_review": false,
+      "dotsphere_steps": [
+        "Go to Proposal Follow-ups screen on L400",
+        "Set Print Letter = B",
+        "Go to DotSphere",
+        "Select: All Data Verified? + Mandatory PF/BI/FFF Missing Info? + Initial/Continue Pending Requirement with Original NTU days"
+      ]
+    },
+    "ReferToUW": {
+      "condition": "Any UW indicator triggers OR RCS result Refer",
+      "workflow_action": "Underwriting Review",
+      "human_review": true,
+      "dotsphere_steps": [
+        "Go to DotSphere",
+        "Select Decision: Underwriting Review?"
+      ]
+    },
+    "TriggerGNS": {
+      "condition": "C09 follow-up code outstanding or compliance hit",
+      "workflow_action": "Compliance workflow",
+      "human_review": true,
+      "dotsphere_steps": [
+        "Go to DotSphere",
+        "Select Decision: Trigger GNS review"
+      ]
+    },
+    "Withdrawal": {
+      "condition": "Withdrawal request received",
+      "workflow_action": "Close case",
+      "human_review": false,
+      "dotsphere_steps": [
+        "Go to Contract Issue screen on L400",
+        "Enter Contract Number",
+        "Action = B",
+        "Reason = N001",
+        "Go to DotSphere",
+        "Select Decision: Withdrawal Request Received"
+      ]
+    }
+  },
+
+  "followup_codes_critical": {
+    "CSL": { "category": "CareShield Life", "meaning": "CareShield specific clarification required" },
+    "F45": { "category": "Premium", "meaning": "Premium mismatch detected" },
+    "C09": { "category": "Compliance", "meaning": "GNS re-screening required" },
+    "AT3": { "category": "Admin", "meaning": "Additional requirement pending" }
+  }
+}

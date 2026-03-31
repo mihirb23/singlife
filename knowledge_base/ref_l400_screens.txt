@@ -1,0 +1,114 @@
+# L400 System Screens Reference
+
+## Purpose
+Documents the key L400 (Life400 policy administration system) screens used during New Business processing. The AI references these when guiding ops staff through decision steps.
+
+## Screen: Client Underwriting Enquiries (LBACT-FPL 1)
+Purpose: View client's underwriting indicators and financial aggregation of sum insured.
+
+### Header Fields
+- Client No: Unique client identifier (e.g., 55167349)
+- Client Name: Full name with salutation (e.g., MR. Client Fields Test)
+- DOB: Date of birth (e.g., 08/08/1988)
+- Race: Client race code (e.g., OTH = Other, CHI = Chinese)
+- Gender: M or F
+- ID No: NRIC/FIN number (e.g., S8483123I)
+
+### Underwriting Indicator Fields
+These are the key fields checked in Steps 8C-8F:
+- UW Sub-std: Substandard underwriting indicator (N = No, Y = Yes, M = Modified)
+- Not-Taken Up: Policy not taken up indicator
+- Decline: Previous decline indicator (N = No, Y = Yes, M = Modified)
+- Postpone: Previous postponement indicator (N = No, Y = Yes, M = Modified)
+- Claim Ind: Claims indicator (N = No, Y = Yes, M = Modified)
+
+Pass values: N (No) or A (Not Applicable) → Continue
+Fail values: Y (Yes) or M (Modified) → Refer to UW
+
+### Financial Aggregation Section
+Shows sum insured broken down by risk type:
+- Aggregation Currency: SGD
+- Columns: Aggregate SA Proposal | Aggregate SA In-force | Total Aggregate SA
+
+Risk types shown (examples from UAT):
+- Long Term Care: e.g., Proposal $8,000 + In-force $0 = Total $8,000
+- Early Critical Illness Cover: e.g., $100,000
+- MultiPayCI Recurrent CI: e.g., $400,000
+
+For CareShield Jet UW (Step 8B), the AI checks the Long Term Care row's Total Aggregate SA against the ANB thresholds.
+
+### Navigation Keys
+- F1 = Help, F3 = Exit, F12 = Cancel
+- Total Fin (X): View total financial aggregation
+- Med TSAR: Medical total SA review
+- Total Prem (X): View total premiums
+- Pol Detail (X): View policy details
+
+## Screen: Underwriting Decision Update
+Purpose: Lock the final underwriting decision.
+Used in: Decision A (Standard)
+Key fields:
+- Proposal Accepted: Y (Yes) / N (No)
+- Print Acceptance Letter: B
+
+## Screen: Proposal Follow-ups
+Purpose: View and manage outstanding follow-up codes.
+Used in: Step 7A-7C, Decision B (Standard with Further Requirements)
+Key fields:
+- Follow-up Code: 3-character code (e.g., CSL, F45, C09)
+- Follow-up Status: R (Resolved) / O (Outstanding)
+- Print Letter: B (when sending follow-up letter)
+
+Rule: ALL follow-up codes must have status R for the case to proceed to Standard decision.
+
+## Screen: Contract Issue
+Purpose: Process withdrawals and contract actions.
+Used in: Decision F (Withdrawal)
+Key fields:
+- Contract Number: Policy number (e.g., G0406789)
+- Action: B (withdrawal action)
+- Reason: N001 (withdrawal reason code)
+
+## DotSphere Decision Options
+DotSphere is the workflow/decision system where the final decision is locked.
+
+| Decision | DotSphere Selection |
+|----------|-------------------|
+| Standard | Decision Locked with No Further Requirements |
+| Standard with Further Req | All Data Verified? + Mandatory PF/BI/FFF Missing Info? + Initial/Continue Pending Requirement with Original NTU days |
+| Refer to UW | Underwriting Review? |
+| GNS Review | Trigger GNS review |
+| Compliance | Compliance Docs Received/Trigger Compliance |
+| Withdrawal | Withdrawal Request Received |
+
+## FileNet Document Structure
+FileNet is the document repository. Each policy number has this folder structure:
+
+Policy Number/
+  New Biz/
+    Prop Form (Proposal Form)
+    BI (Benefit Illustration)
+    LA(F) (Life Assured form)
+    IDENT (Identity document)
+    ALT (Alteration)
+    LA-signed
+    Policy Doc(F)
+    Statement/Misc
+  U/W (Underwriting)/
+    UW-Wksht(F) (UW Worksheet)
+    Corr-RI(F) (Correspondence - Reinsurance)
+    QUEST (Questionnaire)
+    FINST (Financial Statement)
+    InternalUW
+    Med - U/W (Medical UW)
+    Corrpd (Correspondence)
+  Med - U/W (Medical)/
+    Med Rep (Medical Report)
+    MAR request(F) (Medical Appointment Request)
+    Med Rep(F)
+    MAR consent
+  Statement/Misc
+  Corrpd
+  Alteration
+
+Steps 1A-1C check: Identity Doc exists in IDENT folder, BI exists in BI folder, Application Form exists in Prop Form.

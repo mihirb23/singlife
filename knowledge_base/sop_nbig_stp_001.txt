@@ -427,3 +427,19 @@ Flag and log for clarification if any of the following occurs:
 - SOP for Jet Criteria for All Plans
 - 03 NBA Master SOP
 - 1 - PDD - STP for Clean Cases v2.0
+
+## Knowledge Base Cross-References
+- ref_myinfo_consent_rules.txt — Step 2A timestamp validation formula and scenarios
+- ref_followup_codes.txt — Complete FUP code dictionary (93 codes) with critical code definitions (CSL, C09, F45, AT3)
+- ref_rcs_icd_pass_refer.txt — Definitive ICD code Pass/Refer mapping for Step 8H
+- ref_name_sequence_rules.txt — Step 5A name format rules (currently skipped, all channels = NO)
+- ref_race_update_rules.txt — Step 5B race update OTH→CHI rules (currently skipped, all channels = NO)
+- ref_premium_reference.txt — Steps 6A-6I premium structure and validation (currently NA for all channels)
+- ref_careshield_product.txt — Product eligibility, premium structure, application form details
+- ref_field_validation_reasons.txt — Why each Step 5C field matters (business justification)
+- ref_l400_screens.txt — L400 screen layouts and field locations
+- ref_uw_decisions.txt — Historical UW outcome distribution data
+- ref_icd_codes.txt — ICD code source data with occurrence counts
+- sop_jet_uw_criteria.txt — Jet UW threshold rules for CareShield plans
+- sop_rules.json — Machine-readable rules driving the rules engine
+- knowledge_gap_log.json — Known gaps and ambiguities (US1.4 deliverable)

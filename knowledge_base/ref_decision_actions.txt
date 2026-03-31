@@ -1,0 +1,80 @@
+# Decision Action Steps Reference
+
+## Purpose
+Exact step-by-step instructions for each decision outcome on DotSphere and L400. After the AI evaluates a case, it recommends one of these decision paths. Ops staff follows the steps below.
+
+## Decision A: Standard (No UW Review, No Outstanding Items)
+When to use: All applicable SOP steps pass. No outstanding follow-ups. No UW indicator triggers.
+
+Steps:
+1. Go to 'Underwriting Decision Update' screen on L400
+2. Set Proposal Accepted = Y
+3. Set Print Acceptance Letter = B
+4. Go to DotSphere
+5. Select Decision: 'Decision Locked with No Further Requirements'
+
+Human Review Required: No
+
+## Decision B: Standard with Further Requirements
+When to use: No UW review required, but further requirements needed (missing docs, PF not all R, unresolved data mismatch).
+
+Steps:
+1. Go to 'Proposal Follow-ups' screen on L400
+2. Set Print Letter = B
+3. Go to DotSphere
+4. Select Decision: Select 'All Data Verified?' + 'Mandatory PF/BI/FFF Missing Info?' + 'Initial/Continue Pending Requirement with Original NTU days'
+
+Human Review Required: No
+
+## Decision C: Refer to UW
+When to use: Any Jet UW indicator triggered (Sub-std=Y/M, Decline=Y/M, Postpone=Y/M, Claim Ind=Y/M with RCS Refer). SA/ANB threshold exceeded.
+
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Underwriting Review?'
+
+Human Review Required: Yes
+
+## Decision D: Trigger GNS Review
+When to use: C09 follow-up code status is 'O' (Outstanding) OR any client fields were amended that require GNS re-screening.
+
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Trigger GNS review'
+
+Human Review Required: Yes
+
+## Decision E: Trigger Compliance Docs Received / Trigger Compliance
+When to use: GNS follow-up code is 'O' OR there is a GNS hit requiring compliance review.
+
+Steps:
+1. Go to DotSphere
+2. Select Decision: 'Compliance Docs Received/Trigger Compliance'
+
+Human Review Required: Yes
+
+## Decision F: Withdrawal Request Received
+When to use: Withdrawal request has been received for the case.
+
+Steps:
+1. Go to 'Contract Issue' screen on L400
+2. Enter Contract Number
+3. Action = B
+4. Reason = N001
+5. Go to DotSphere
+6. Select Decision: 'Withdrawal Request Received'
+
+Human Review Required: No
+
+## Decision Aggregation Logic (Step 9A)
+The AI determines the final decision using this priority order:
+
+| Priority | Condition | AI Recommendation | Workflow Action |
+|----------|-----------|-------------------|-----------------|
+| 1 | Any UW indicator triggers OR RCS result = Refer | Refer to UW | Underwriting Review |
+| 2 | C09 outstanding or compliance hit | Trigger GNS / Compliance | Compliance workflow |
+| 3 | Withdrawal request received | Withdrawal | Close case |
+| 4 | Any doc missing OR PF not all R OR unresolved data mismatch | Standard with Further Requirements | Trigger follow-up / pending requirements |
+| 5 | All applicable steps Pass; no outstanding PF | Standard | Decision Locked with No Further Requirements |
+
+Note: Higher priority decisions override lower ones. For example, if both a UW indicator is triggered AND a PF is outstanding, the decision is "Refer to UW" (not "Standard with Further Requirements").

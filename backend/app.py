@@ -140,28 +140,16 @@ def upload_document():
 
 @app.route('/api/evaluate', methods=['POST'])
 def evaluate_case():
-    """user pastes case data (json or text), we build a prompt and run it thru the SOP checklist"""
+    """hybrid evaluation — rules engine runs first, then claude explains the results"""
     data = request.get_json(silent=True)
     if not data or 'caseData' not in data:
         return jsonify({'error': 'Request body must include "caseData"'}), 400
 
     case_data = data['caseData']
-
-    # build the eval prompt — tells claude to check every SOP step
-    eval_prompt = (
-        "Evaluate the following case against SOP-NBIG-STP-001 (New Business Pre-Issue Checks & Decisioning). "
-        "Go through EVERY applicable step in the SOP checklist. "
-        "Show Pass / Fail / Manual Review / N/A for each step with reasoning.\n\n"
-        f"**Case Data:**\n```\n{json.dumps(case_data, indent=2) if isinstance(case_data, dict) else str(case_data)}\n```\n\n"
-        "Provide the full evaluation in the required 5-part format: "
-        "1) SOP Rule Evaluation, 2) Overall Decision, 3) Ops Outcome, 4) Automation Trigger, 5) Automation Input JSON."
-    )
-
     messages = data.get('messages', [])
-    messages.append({'role': 'user', 'content': eval_prompt})
 
     def generate():
-        for chunk in assistant.chat_stream(messages, mode='evaluate'):
+        for chunk in assistant.evaluate_stream(case_data, messages):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 

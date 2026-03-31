@@ -1,0 +1,93 @@
+# RCS ICD Code Pass/Refer Mapping
+# Referenced by: Step 8H in SOP-NBIG-STP-001
+
+## Purpose
+Definitive pass/refer classification for ICD codes used in RCS (Risk Claims System)
+checks. When Step 8G triggers RCS (only Claim Ind = Y, all other indicators = N),
+the ICD codes from the shield claim are evaluated against this mapping.
+
+## How RCS Check Works
+1. Step 8G determines that only Claim Ind = Y and all others (Sub-std, Decline, Postpone) = N
+2. System retrieves the ICD codes from the client's prior shield claims
+3. Each ICD code is checked against the pass/refer mapping below
+4. If ALL codes = Pass → Decision: Standard (STP)
+5. If ANY code = Refer → Decision: Refer to UW
+
+## ICD Code Classification
+
+### PASS — Standard (STP eligible, no UW review needed)
+These conditions are considered low-risk and do not require underwriter review:
+
+| ICD Code | Description | Rationale |
+|----------|-------------|-----------|
+| M54 | Dorsalgia (back pain) | Common musculoskeletal, low mortality risk |
+| M95 | Other acquired musculoskeletal deformities | Structural, non-progressive |
+| D36 | Benign neoplasm (other sites) | Benign = non-cancerous |
+| D24 | Benign neoplasm of breast | Benign = non-cancerous |
+| H58 | Other eye disorders | Low systemic risk |
+| H93 | Other ear disorders | Low systemic risk |
+| L30 | Other dermatitis | Skin condition, low risk |
+| N73 | Female pelvic inflammatory disease | Treatable, low LTC risk |
+| R07 | Pain in throat and chest | Symptom only (not diagnosis) |
+| Z83 | Family history of disorders | History only, not active condition |
+| Z04 | Examination and observation | Screening, no active condition |
+| Z68 | Body mass index (BMI) | Indicator only, not a disease |
+| K59 | Other functional intestinal disorders | Common, low risk |
+| OC.000 | Occupational code (standard) | Baseline occupational risk |
+
+### REFER TO UW — Requires underwriter review
+These conditions carry material risk for long-term care insurance:
+
+| ICD Code | Description | Rationale |
+|----------|-------------|-----------|
+| C80 | Malignant neoplasm (unspecified) | Cancer — high claim risk |
+| F32 | Major depressive disorder (single) | Mental health — affects ADL capacity |
+| F32.9 | Major depressive disorder (unspecified) | Mental health — affects ADL capacity |
+| F09 | Unspecified mental disorder | Mental health — affects ADL capacity |
+| I51 | Heart disease complications | Cardiovascular — high mortality/morbidity |
+| I10 | Essential hypertension | Cardiovascular risk factor — needs UW assessment |
+| I77 | Other arterial disorders | Vascular disease — systemic risk |
+| E14 | Unspecified diabetes mellitus | Metabolic — multi-organ complications |
+| E78 | Disorders of lipoprotein metabolism | Cholesterol — cardiovascular risk factor |
+| K75 | Other inflammatory liver diseases | Organ disease — progressive risk |
+| J45 | Asthma | Respiratory — severity varies, needs assessment |
+| AV.012 | Aviation risk code | Non-standard risk classification |
+
+## Multi-Code Cases
+When a client has MULTIPLE ICD codes:
+- If ANY single code = Refer → entire case = Refer to UW
+- Pass codes do not override Refer codes
+- The combination of codes may increase risk (e.g., E14 + E78 = diabetes + cholesterol)
+
+## Known Multi-Code Combinations from Data
+| Combination | Result | Notes |
+|-------------|--------|-------|
+| H58 + I10 | REFER | I10 triggers refer |
+| E78 + K75 | REFER | Both are refer codes |
+| I10 + M54 | REFER | I10 triggers refer |
+| M95 + OC.000 | PASS | Both are pass codes |
+| E14 + E78 | REFER | Both are refer codes |
+| E78 + Z68 | REFER | E78 triggers refer |
+| E78 + I51 | REFER | Both are refer codes |
+| AV.012 + Z04 | REFER | AV.012 triggers refer |
+| F32 + F32.9 | REFER | Both are refer codes |
+
+## Important Notes
+- This mapping is derived from the NB.MASTER dataset (807,851 records) and the
+  Processing Steps matrix provided by Singlife Ops (Sharon/Terence)
+- AI uses this mapping result only — AI does NOT make medical judgements
+- If an ICD code is encountered that is NOT in this mapping, flag as Knowledge Gap
+  and default to REFER TO UW (conservative approach)
+- For Sprint 2 prototype: this mapping covers all 26 ICD codes observed in actual data
+
+## Channel Applicability for Step 8H
+- QnB: NO (decision step — AI evaluates but human locks)
+- EzSub: NO (decision step)
+- Hardcopy: NO (decision step)
+Note: The RCS check itself (8G trigger) applies to all channels (YES/YES/YES).
+The result of 8H feeds into Step 9A decision aggregation.
+
+## References
+- Step 8G/8H in SOP-NBIG-STP-001
+- ref_icd_codes.txt (source data with occurrence counts)
+- sop_jet_uw_criteria.txt (Rule 6: RCS check criteria)

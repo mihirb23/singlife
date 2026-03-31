@@ -1,0 +1,73 @@
+# MyInfo Consent Form Timestamp Validation Rules
+# Referenced by: Step 2A in SOP-NBIG-STP-001
+
+## Purpose
+Ensure that the MyInfo consent form timestamp is within validity before proceeding
+with client data verification. This step applies to EzSub and Hardcopy channels only
+(QnB = NO).
+
+## Validation Formula
+The consent timestamp is VALID if:
+  (Application Submission Date) - (MyInfo Consent Timestamp) <= 365 days (1 year)
+
+The consent timestamp is INVALID if:
+  (Application Submission Date) - (MyInfo Consent Timestamp) > 365 days (1 year)
+
+## Input Fields
+- MyInfo Consent Timestamp: Date/time when customer gave MyInfo consent
+  (found on the MyInfo Consent Form document in FileNet)
+- Application Submission Date: Date the application was submitted
+  (from SUBMISSION_DATIME field in case data or from the Application Form)
+
+## Evaluation Logic
+
+### Scenario 1: Valid Timestamp
+- Condition: Consent timestamp exists AND is within 1 year of app submission date
+- Result: PASS
+- Action: Proceed to next step
+
+### Scenario 2: Invalid Timestamp (Expired)
+- Condition: Consent timestamp exists BUT is more than 1 year before app submission date
+- Result: FAIL
+- Action: Create follow-up (FUP) for expired consent
+- Decision Impact: Standard with Further Requirements
+- Ops Action: Request customer to provide new MyInfo consent
+
+### Scenario 3: Missing Timestamp
+- Condition: Consent timestamp is NOT available or cannot be read from document
+- Result: FAIL (do NOT assume validity)
+- Action: Flag as missing document / data
+- Decision Impact: Standard with Further Requirements
+- AI Note: AI must NOT assume timestamp is valid if missing. Flag as knowledge gap.
+
+### Scenario 4: Missing MyInfo Consent Form Document
+- Condition: MyInfo Consent Form document does not exist in FileNet
+- Result: FAIL
+- Action: Create follow-up for missing document
+- Decision Impact: Standard with Further Requirements
+
+## Channel Applicability
+- QnB: NO (skip this step — QnB uses direct digital submission, no MyInfo form)
+- EzSub: YES
+- Hardcopy: YES
+
+## Why This Matters
+MyInfo consent allows Singlife to retrieve pre-verified government data (NRIC, name,
+DOB, address) for the customer. If the consent is expired, the retrieved data may
+no longer reflect the customer's current information, creating compliance and accuracy risks.
+
+## Edge Cases
+- If the application is backdated, use the ORIGINAL submission date (not the backdated
+  policy start date) to compute the 1-year window
+- Leap year: use calendar days (365 or 366 depending on year)
+- If multiple consent forms exist, use the MOST RECENT timestamp
+
+## Data Source Mapping
+| Field | System | Column/Location |
+|-------|--------|----------------|
+| Consent Timestamp | FileNet | MyInfo Consent Form document metadata |
+| App Submission Date | Case Data | SUBMISSION_DATIME |
+
+## References
+- Step 2A in SOP-NBIG-STP-001
+- Processing Steps matrix (30 Mar version), Row: Document Checks / 2A

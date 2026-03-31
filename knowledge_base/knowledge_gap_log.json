@@ -1,0 +1,86 @@
+[
+  {
+    "gap_id": "KG-001",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Step 8H",
+    "category": "Threshold / Reference List",
+    "description": "RCS ICD pass/fail mapping not officially confirmed by UW team",
+    "detail": "The ICD code pass/refer classification in ref_rcs_icd_pass_refer.txt is derived from observed data patterns in NB.MASTER. The actual production pass/fail determination should be confirmed with the UW team (Sharon/Terence). Current mapping covers all 26 observed codes but may not cover new ICD codes encountered in future cases.",
+    "impact": "If an unknown ICD code appears, AI defaults to Refer to UW (conservative). This may cause unnecessary UW referrals for low-risk conditions.",
+    "suggested_clarification": "Request UW team to validate the pass/refer mapping and provide the official RCS ICD code list used in production.",
+    "status": "Open",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-002",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Step 7B / ref_followup_codes.txt",
+    "category": "Missing Definitions",
+    "description": "Business definitions incomplete for many follow-up codes",
+    "detail": "Of the 93 unique follow-up codes observed in NB.MASTER, only the top ~15 have confirmed business descriptions. The remaining ~78 codes (mostly B-series benefit reviews, S-series screening codes, Q-series queries) have inferred descriptions based on naming patterns. Specifically, CSL (Customer clarification) and C09 (Compliance/GNS) are critical codes that drive decision paths but their full trigger conditions are not documented.",
+    "impact": "AI can detect that a code is outstanding (status != R) but cannot explain WHY the code was raised or what specific action is needed to resolve it. This limits the usefulness of AI recommendations for ops staff.",
+    "suggested_clarification": "Request Sharon/Terence to provide a mapping of at least the top 20 follow-up codes with: (1) full business description, (2) what triggers the code, (3) what action resolves it, (4) who is responsible for resolution.",
+    "status": "Open",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-003",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Step 2A",
+    "category": "Data Access",
+    "description": "MyInfo consent timestamp not available in UAT case data",
+    "detail": "The UAT data extraction (QNB LTC) does not include the MyInfo consent timestamp field. Step 2A validation requires comparing the consent timestamp against the application submission date, but this field is only available on the MyInfo Consent Form document in FileNet, which is outside the student scope (metadata only).",
+    "impact": "AI cannot evaluate Step 2A with real data in the prototype. For Sprint 2, this step is skipped for QnB (channel flag = NO) but would be needed for EzSub/Hardcopy demos.",
+    "suggested_clarification": "For EzSub test cases, provide either: (1) mock consent timestamps in the case data, or (2) confirm that this step should be simulated with synthetic values.",
+    "status": "Open",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-004",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Steps 6A-6I",
+    "category": "Scope / Data Access",
+    "description": "Premium calculation tables not available for validation",
+    "detail": "Steps 6A-6I (Contract Information Checks) are marked NA for all channels in the current scope. However, if scope expands to include premium validation, the AI would need access to the actual premium rate tables by plan, age band, gender, and benefit structure. These tables are proprietary and not included in the knowledge base.",
+    "impact": "No impact for Sprint 2 (all steps are NA). Future risk: if premium validation is added, AI cannot independently verify whether a premium amount is correct without the rate tables.",
+    "suggested_clarification": "If premium checks are brought into scope, request the CareShield premium rate table (EYA/EYB) by ANB, gender, benefit level, and structure (Level/Escalating).",
+    "status": "Deferred",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-005",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Step 3A",
+    "category": "Missing Scenario Rules",
+    "description": "Resolution path unclear when NRIC search returns 0 or >1 results",
+    "detail": "Step 3A states that 0 or >1 results = Exception → Refer Ops. However, the SOP does not document the specific ops resolution steps: How does ops determine the correct client when >1 matches exist? What happens when 0 results are found — is it always a new client creation? Are there cases where 0 results indicate a data entry error vs genuinely new client?",
+    "impact": "AI correctly flags the exception but cannot provide specific guidance to ops on HOW to resolve it. The recommended_action is generic ('Manual review to resolve correct client record').",
+    "suggested_clarification": "Document the ops resolution workflow for: (1) >1 NRIC matches (merge/void process), (2) 0 NRIC matches (new client creation vs data correction).",
+    "status": "Open",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-006",
+    "date_logged": "2026-03-31",
+    "sop_reference": "General",
+    "category": "Test Data",
+    "description": "No Hardcopy channel test data available",
+    "detail": "UAT data only covers QnB and EzSub channels. If Hardcopy processing is in scope for future sprints, test cases with Hardcopy-specific data would be needed. Hardcopy has the most steps applicable (YES for nearly all steps including 1A-3A which are NO for QnB).",
+    "impact": "Cannot validate AI behaviour for Hardcopy channel. All Hardcopy-specific rules are untested.",
+    "suggested_clarification": "Provide sample Hardcopy test cases or confirm Hardcopy is out of scope for the project.",
+    "status": "Deferred",
+    "logged_by": "NTU Team (Mihir)"
+  },
+  {
+    "gap_id": "KG-007",
+    "date_logged": "2026-03-31",
+    "sop_reference": "Step 8B",
+    "category": "Threshold Clarification",
+    "description": "ANB/SA threshold rules have ambiguous boundary for ANB 18-30 range",
+    "detail": "Step 8B defines three rules: (1) SA <= $6,000 AND ANB 18-30 = Continue, (2) SA > $6,000 = Refer UW, (3) SA > $5,000 AND ANB >= 31 = Refer UW. The boundary case is unclear: What happens when SA is exactly $5,000 and ANB is 31? Rule 3 says '>$5,000' so $5,000 exactly would not trigger. But what about SA = $6,000 and ANB = 31? Rule 1 only covers ANB 18-30, rule 2 covers >$6,000 (not =). Need confirmation on whether boundaries are inclusive or exclusive.",
+    "impact": "Edge cases at exact threshold values may produce inconsistent results. Current implementation uses > (exclusive) for thresholds as written in the SOP.",
+    "suggested_clarification": "Confirm whether SA thresholds are inclusive (>=) or exclusive (>) and clarify the rule for ANB 31+ with SA between $5,001 and $6,000.",
+    "status": "Open",
+    "logged_by": "NTU Team (Mihir)"
+  }
+]

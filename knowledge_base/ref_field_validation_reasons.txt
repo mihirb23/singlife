@@ -1,0 +1,58 @@
+# Client Field Validation — Why Each Field Matters
+
+## Purpose
+Explains the business reason behind each client information check (Step 5C in SOP). When the AI flags a mismatch, it should cite the reason from this document.
+
+## Field Validation Rules
+
+### Sex / Gender
+- Why it matters: Gender directly affects premium calculation. Wrong gender = wrong premium.
+- Mismatch action: Flag for correction. Premium recalculation may be required.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### Residential Address (Block/Street No, Street Name, Unit No, Postcode, Country)
+- Why it matters: PDPA compliance. Incorrect address leads to return mail, which is a PDPA violation.
+- Mismatch action: Flag for update. Do NOT send correspondence until address is corrected.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### SMS / Mobile Number
+- Why it matters: PDPA compliance. Sending SMS to wrong number is a data breach.
+- Mismatch action: Flag for update.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### Email Address
+- Why it matters: Client needs this email to register their MySinglife account. Wrong email = client cannot access their policy online.
+- Mismatch action: Flag for update.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### Nationality
+- Why it matters: Compliance-related. Nationality affects regulatory requirements, sanctions screening, and product eligibility (CareShield requires Singapore residency).
+- Mismatch action: Flag for verification. Critical field — may require manual eKYC verification.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### Identity No (NRIC/FIN)
+- Why it matters: Compliance-related. NRIC is the primary client identifier. Wrong NRIC = wrong client record = potential fraud or data error.
+- Mismatch action: Flag as critical. Do NOT proceed until identity is confirmed. May require eKYC/NRC verification.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+### Birth Date (DOB)
+- Why it matters: ANB (Age Next Birthday) directly affects premium calculation. Wrong DOB = wrong ANB = wrong premium.
+- Mismatch action: Flag as critical. Premium recalculation required if DOB changes.
+- Applies to: QnB (YES), EzSub (YES), Hardcopy (YES)
+
+## Why Mismatches Happen
+Information may be wrong due to:
+- Concurrent applications (e.g., EzSub application submitted after a QnB, fields may be overwritten)
+- Manual entry errors (especially for EzSub/Hardcopy channels where data is keyed manually)
+- System determines existing vs new client — most fields are overridden by new submissions
+- Critical fields (DOB, Gender, NRIC, Nationality) require manual verification if discrepancies occur
+
+## Steps That Do NOT Apply to Any Channel (Always Skip)
+- Step 5A: Check name sequence — NO for all channels
+- Step 5B: Update Race OTH to CHI — NO for all channels
+- Step 5D: Update fields on L400 — NO for all channels (Human-only action, AI must NOT modify data)
+
+## Race Field (Step 5B)
+- Default race in L400 is often 'OTH' (Other)
+- If document shows 'CHI' (Chinese), recommend human update from OTH to CHI
+- AI role: Evaluate only. Recommend update but NEVER execute it.

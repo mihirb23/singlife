@@ -109,3 +109,14 @@ LOWER RISK (often standard with possible exclusion):
 NOTE: This classification is derived from observed data patterns in the
 NB.MASTER file. The actual pass/fail determination should be confirmed
 with the UW team (Sharon/Terence) for production use.
+
+For the definitive Pass vs Refer mapping used by the AI rules engine,
+see: ref_rcs_icd_pass_refer.txt
+
+PASS codes (STP eligible): M54, M95, D36, D24, H58, H93, L30, N73, R07,
+  Z83, Z04, Z68, K59, OC.000
+REFER codes (needs UW review): C80, F32, F32.9, F09, I51, I10, I77, E14,
+  E78, K75, J45, AV.012
+
+Rule: If ANY code in a case = Refer → entire case = Refer to UW
+      If ALL codes = Pass → Standard (STP)
