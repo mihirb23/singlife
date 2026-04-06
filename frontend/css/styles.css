@@ -94,15 +94,15 @@ body { display: flex; height: 100vh; overflow: hidden; }
 
 /* mode toggle — switch between chat and evaluate */
 .mode-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .mode-btn {
-  flex: 1;
-  padding: 7px 12px;
+  padding: 7px 6px;
   border: 1px solid var(--border-l);
   border-radius: 8px;
   background: transparent;
@@ -112,6 +112,8 @@ body { display: flex; height: 100vh; overflow: hidden; }
   font-family: var(--font);
   cursor: pointer;
   transition: all var(--ease);
+  white-space: nowrap;
+  text-align: center;
 }
 
 .mode-btn:hover { border-color: var(--text-dim); color: var(--text); }
@@ -193,6 +195,14 @@ body { display: flex; height: 100vh; overflow: hidden; }
 
 .conv-item:hover .conv-delete { opacity: 1; }
 .conv-delete:hover { color: var(--danger); }
+
+.conv-empty {
+  padding: 16px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  font-style: italic;
+}
 
 /* document list in sidebar */
 .document-list {

@@ -33,6 +33,11 @@ def index():
     return send_from_directory(app.static_folder, 'index.html')
 
 
+@app.route('/architecture.html')
+def architecture():
+    return send_from_directory(app.static_folder, 'architecture.html')
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """stream claude's response back via SSE so we get the typing effect"""
@@ -150,6 +155,58 @@ def evaluate_case():
 
     def generate():
         for chunk in assistant.evaluate_stream(case_data, messages):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+        }
+    )
+
+
+@app.route('/api/generate-email', methods=['POST'])
+def generate_email():
+    """Use Case 2: generate empathetic customer email for UW decisions"""
+    data = request.get_json(silent=True)
+    if not data or 'emailData' not in data:
+        return jsonify({'error': 'Request body must include "emailData"'}), 400
+
+    email_data = data['emailData']
+    messages = data.get('messages', [])
+
+    def generate():
+        for chunk in assistant.email_draft_stream(email_data, messages):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+        }
+    )
+
+
+@app.route('/api/qa-review', methods=['POST'])
+def qa_review():
+    """Use Case 3: QA review of underwriting results"""
+    data = request.get_json(silent=True)
+    if not data or 'qaData' not in data:
+        return jsonify({'error': 'Request body must include "qaData"'}), 400
+
+    qa_data = data['qaData']
+    messages = data.get('messages', [])
+
+    def generate():
+        for chunk in assistant.qa_review_stream(qa_data, messages):
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 

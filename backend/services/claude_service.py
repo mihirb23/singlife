@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from services.rules_engine import evaluate_case
 from services.rag_service import VectorStore
+from services.privacy_filter import PrivacyFilter
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=True)
 
@@ -271,17 +272,24 @@ class InsuranceAssistant:
         rules_result = self.evaluate_with_rules_engine(case_data)
 
         if rules_result and "error" not in rules_result:
-            # step 2: get relevant SOP context via RAG
+            # step 2: privacy filter — sanitize before LLM
+            pf = PrivacyFilter()
+            sanitized_result = pf.sanitize_for_llm(rules_result)
+            mask_log = pf.get_mask_log()
+            if mask_log:
+                logger.info(f"Privacy filter masked {len(mask_log)} PII items before LLM call")
+
+            # step 3: get relevant SOP context via RAG
             query = f"SOP evaluation {rules_result.get('channel', '')} {rules_result.get('cnt_type', '')} case checks"
             rag_context = self._get_rag_context(query)
 
-            # step 3: build prompt with rules engine output + RAG context
+            # step 4: build prompt with SANITIZED rules engine output + RAG context
             system_prompt = SYSTEM_PROMPT_BASE + f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
 
             eval_prompt = (
                 "The **Rules Engine** has already evaluated this case deterministically. "
                 "Your job is to explain the results clearly and provide actionable guidance.\n\n"
-                f"## Rules Engine Output\n```json\n{json.dumps(rules_result, indent=2)}\n```\n\n"
+                f"## Rules Engine Output\n```json\n{json.dumps(sanitized_result, indent=2)}\n```\n\n"
                 "Please present this as a clear, well-formatted evaluation report with:\n"
                 "1. SOP Rule Evaluation table (explain each step)\n"
                 "2. Overall Decision\n"
@@ -330,6 +338,217 @@ class InsuranceAssistant:
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error communicating with Claude API:** {str(e)}"
+
+    def email_draft_stream(self, email_data: dict, messages: list) -> Iterator[str]:
+        """Use Case 2: generate empathetic customer email for UW decisions.
+        AI communicates decisions — it does NOT make them."""
+        if not self.client:
+            yield "**Configuration Error:** API key not set."
+            return
+
+        decision_type = email_data.get('decision_type', 'Decline')
+        customer_name = email_data.get('customer_name', '[Customer Name]')
+        outcome_summary = email_data.get('outcome_summary', 'Unable to offer coverage at this time')
+        tone = email_data.get('tone_required', 'Empathetic')
+
+        rag_context = self._get_rag_context(
+            f"email communication rules {decision_type} customer empathetic compliant", top_k=10)
+
+        email_system = (
+            "You are the **Singlife AI Customer Communication Assistant**.\n\n"
+            "## Your Role\n"
+            "You draft empathetic, compliant customer emails for underwriting decisions.\n"
+            "The decision has ALREADY been made by the underwriter. You only COMMUNICATE it.\n\n"
+            "## CRITICAL RULES — NON-NEGOTIABLE\n"
+            "- NEVER disclose medical conditions, diagnoses, test names, ICD codes\n"
+            "- NEVER reference internal UW logic, thresholds, systems (L400, DotSphere)\n"
+            "- NEVER blame the customer or sound judgmental\n"
+            "- NEVER use clinical or technical medical language\n"
+            "- ALL emails are DRAFTS for human review — never auto-sent\n"
+            "- Use general terms only: 'overall assessment', 'current guidelines'\n\n"
+            "## Tone Requirements\n"
+            f"- Decision Type: {decision_type}\n"
+            f"- Required Tone: {tone}\n"
+            "- Decline = Empathetic | Postpone = Reassuring | Counter-offer = Supportive\n\n"
+            "## Output Format\n"
+            "Produce TWO sections:\n"
+            "### 1. Analysis (Internal — for ops review)\n"
+            "- Decision context, tone assessment, guardrails check\n"
+            "- Confirm: no medical disclosure, compliant language\n\n"
+            "### 2. Customer Email Draft\n"
+            "- Subject line\n"
+            "- Full email body: Greeting → Acknowledgement → Decision → Reassurance → Next Steps → Support → Closing\n"
+            "- Sign off: Warm regards, [Frontliner Name / Customer Service Team], [Company Name]\n\n"
+            f"## RELEVANT CONTEXT\n\n{rag_context}"
+        )
+
+        user_prompt = (
+            f"Generate a customer email for this underwriting decision:\n\n"
+            f"**Decision Type:** {decision_type}\n"
+            f"**Customer Name:** {customer_name}\n"
+            f"**Outcome Summary:** {outcome_summary}\n"
+            f"**Tone:** {tone}\n"
+            f"**Additional Context:** {json.dumps({k: v for k, v in email_data.items() if k not in ('decision_type', 'customer_name', 'outcome_summary', 'tone_required')}, indent=2)}\n\n"
+            "Follow the email communication rules exactly. Produce the Analysis section first, then the full Customer Email Draft."
+        )
+
+        eval_messages = list(messages) + [{'role': 'user', 'content': user_prompt}]
+
+        try:
+            full_response = ''
+            with self.client.messages.stream(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=email_system,
+                messages=eval_messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    full_response += text
+                    yield text
+            log_qa(f"email_draft:{decision_type}", full_response, 'email')
+        except Exception as e:
+            logger.error(f"Claude API error: {e}")
+            yield f"\n\n**Error:** {str(e)}"
+
+    def _calculate_qa_score(self, qa_data: dict) -> dict:
+        """Calculate QA complexity score from indicators using ref_qa_underwriting_rules scoring."""
+        icd_cnt = qa_data.get('icd_cnt', len(qa_data.get('icd_codes', [])))
+        sensitive = qa_data.get('sensitive_icd_flag', False)
+        exclusions = qa_data.get('exclusion_cnt', 0)
+        loading = qa_data.get('loading_max_pct', 0)
+        reopen = qa_data.get('reopen_flag', 0)
+        days = qa_data.get('days_to_issue', 0)
+        tenure = qa_data.get('uw_tenure_years', 10)
+        decision = qa_data.get('decision', '')
+
+        # auto-detect sensitive ICD if not provided
+        if not sensitive and qa_data.get('icd_codes'):
+            sensitive_codes = {'F09', 'F32', 'F32.9', 'F83', 'C80'}
+            sensitive = any(c in sensitive_codes for c in qa_data['icd_codes'])
+
+        breakdown = []
+        score = 0
+
+        # A) ICD Count
+        if icd_cnt == 0:
+            breakdown.append(("ICD Count", 0, f"{icd_cnt} ICDs"))
+        elif icd_cnt <= 2:
+            score += 2; breakdown.append(("ICD Count", 2, f"{icd_cnt} ICDs"))
+        else:
+            score += 5; breakdown.append(("ICD Count", 5, f"{icd_cnt} ICDs (3+)"))
+
+        # B) Sensitive ICD
+        if sensitive:
+            score += 3; breakdown.append(("Sensitive ICD Cluster", 3, "Sensitive codes present"))
+
+        # C) Exclusions
+        if exclusions == 0:
+            breakdown.append(("Exclusions", 0, "None"))
+        elif exclusions == 1:
+            score += 1; breakdown.append(("Exclusions", 1, f"{exclusions} exclusion"))
+        else:
+            score += 3; breakdown.append(("Exclusions", 3, f"{exclusions} exclusions (2+)"))
+
+        # D) Loading
+        if loading == 0:
+            breakdown.append(("Loading Level", 0, "0%"))
+        elif loading <= 75:
+            score += 1; breakdown.append(("Loading Level", 1, f"{loading}% (1-75%)"))
+        elif loading <= 150:
+            score += 2; breakdown.append(("Loading Level", 2, f"{loading}% (76-150%)"))
+        else:
+            score += 3; breakdown.append(("Loading Level", 3, f"{loading}% (>150%)"))
+
+        # E) Reopen
+        if reopen:
+            score += 2; breakdown.append(("Reopen Case", 2, "Case reopened"))
+
+        # F) Turnaround
+        if days > 90:
+            score += 1; breakdown.append(("Long Turnaround", 1, f"{days} days (>90)"))
+
+        # G) New UW
+        if tenure < 2:
+            score += 1; breakdown.append(("New Underwriter", 1, f"{tenure} years (<2)"))
+
+        # Risk level
+        if decision.lower() in ('decline', 'postpone') and icd_cnt == 0:
+            risk_level = "Validation"
+            recommendation = "Flag for documentation validation — Decline/Postpone without ICD weakens defensibility"
+        elif score >= 10:
+            risk_level = "High"
+            recommendation = "Prioritise for detailed QA review"
+        elif score >= 5:
+            risk_level = "Medium"
+            recommendation = "Enhanced review — additional scrutiny recommended"
+        else:
+            risk_level = "Low"
+            recommendation = "Standard review — routine QA sampling"
+
+        return {
+            "complexity_score": score,
+            "risk_level": risk_level,
+            "recommendation": recommendation,
+            "breakdown": breakdown,
+            "sensitive_icd_flag": sensitive,
+        }
+
+    def qa_review_stream(self, qa_data: dict, messages: list) -> Iterator[str]:
+        """Use Case 3: QA review of underwriting results.
+        AI summarises complexity and supports QA — does NOT override decisions."""
+        if not self.client:
+            yield "**Configuration Error:** API key not set."
+            return
+
+        # calculate score deterministically
+        qa_score = self._calculate_qa_score(qa_data)
+
+        rag_context = self._get_rag_context(
+            "QA underwriting review scoring rules complexity indicators", top_k=10)
+
+        qa_system = (
+            "You are the **Singlife AI QA Review Assistant**.\n\n"
+            "## Your Role\n"
+            "You help QA reviewers understand and explain underwriting results.\n"
+            "You do NOT approve, reject, or override any underwriting decision.\n\n"
+            "## CRITICAL RULES\n"
+            "- NEVER approve/reject/override UW decisions\n"
+            "- NEVER make risk judgments or medical interpretations\n"
+            "- NEVER introduce new assumptions\n"
+            "- Organise information for reviewers, surface patterns, explain complexity\n\n"
+            "## Output Format\n"
+            "1. **QA Summary** — risk level, score, recommendation\n"
+            "2. **Scoring Breakdown** — each rule applied with points\n"
+            "3. **Risk Driver Analysis** — plain language explanation\n"
+            "4. **Explainability Notes** — why this case needs attention\n\n"
+            "Also include structured JSON at the end.\n\n"
+            f"## RELEVANT CONTEXT\n\n{rag_context}"
+        )
+
+        user_prompt = (
+            f"Review this underwriting case for QA:\n\n"
+            f"**Case Data:**\n```json\n{json.dumps(qa_data, indent=2)}\n```\n\n"
+            f"**Pre-calculated QA Score:**\n```json\n{json.dumps(qa_score, indent=2)}\n```\n\n"
+            "Explain the QA scoring, highlight risk drivers, and provide a structured review."
+        )
+
+        eval_messages = list(messages) + [{'role': 'user', 'content': user_prompt}]
+
+        try:
+            full_response = ''
+            with self.client.messages.stream(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=qa_system,
+                messages=eval_messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    full_response += text
+                    yield text
+            log_qa(f"qa_review:{qa_data.get('case_id', 'unknown')}", full_response, 'qa_review')
+        except Exception as e:
+            logger.error(f"Claude API error: {e}")
+            yield f"\n\n**Error:** {str(e)}"
 
     def get_qa_logs(self, limit: int = 50) -> List[Dict]:
         """read the jsonl log and return last N entries"""

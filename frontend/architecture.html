@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Singlife AI Ops — Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --card: #141414; --border: #2a2a2a; --text: #e8e8e8;
+      --dim: #8b8b8b; --accent: #e8364e; --blue: #3b82f6; --green: #22c55e;
+      --yellow: #eab308; --purple: #a855f7; --font: 'Inter', system-ui, sans-serif;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 40px; line-height: 1.6; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: var(--dim); margin-bottom: 40px; font-size: 15px; }
+    .back-link { color: var(--blue); text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 20px; }
+    .back-link:hover { text-decoration: underline; }
+
+    /* architecture flow */
+    .flow { display: flex; flex-direction: column; gap: 24px; margin-bottom: 48px; }
+    .flow-row { display: flex; align-items: center; gap: 16px; }
+    .flow-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 20px; flex: 1; min-width: 0;
+    }
+    .flow-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .flow-box p { font-size: 12px; color: var(--dim); }
+    .flow-box.input { border-left: 3px solid var(--blue); }
+    .flow-box.privacy { border-left: 3px solid var(--yellow); }
+    .flow-box.rules { border-left: 3px solid var(--green); }
+    .flow-box.rag { border-left: 3px solid var(--purple); }
+    .flow-box.llm { border-left: 3px solid var(--accent); }
+    .flow-box.output { border-left: 3px solid #06b6d4; }
+    .arrow { color: var(--dim); font-size: 20px; flex-shrink: 0; }
+    .arrow-down { text-align: center; color: var(--dim); font-size: 20px; }
+
+    /* sections */
+    .section { margin-bottom: 48px; }
+    .section h2 { font-size: 20px; font-weight: 600; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .card h4 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .card p, .card li { font-size: 12px; color: var(--dim); }
+    .card ul { padding-left: 16px; }
+    .card li { margin-bottom: 4px; }
+
+    /* decision table */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { font-weight: 600; color: var(--dim); font-size: 11px; text-transform: uppercase; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .tag-pass { background: #052e16; color: var(--green); }
+    .tag-refer { background: #2a0a0a; color: var(--accent); }
+    .tag-skip { background: #1a1a2e; color: var(--dim); }
+    .tag-further { background: #2a1a00; color: var(--yellow); }
+
+    /* privacy */
+    .privacy-flow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .pf-step { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+    .pf-arrow { color: var(--dim); }
+
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .flow-row { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">&larr; Back to AI Assistant</a>
+    <h1>AI Ops Brain — Architecture</h1>
+    <p class="subtitle">Singlife x NTU veNTUre | End-to-end flow: Input → Privacy Filter → Rules Engine → RAG → LLM → Output</p>
+
+    <!-- ARCHITECTURE FLOW -->
+    <div class="section">
+      <h2>End-to-End Architecture</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-box input">
+            <h3>1. Input Layer</h3>
+            <p>SharePoint docs, case data (JSON), user queries. Sources: L400 extractions, FileNet metadata, application forms.</p>
+          </div>
+          <span class="arrow">→</span>
+          <div class="flow-box privacy">
+            <h3>2. Privacy Filter</h3>
+            <p>Masks NRIC, names, phone, email, addresses before LLM. Rules engine sees raw data; LLM sees sanitized data only.</p>
+          </div>
+          <span class="arrow">→</span>
+          <div class="flow-box rules">
+            <h3>3. Rules Engine</h3>
+            <p>Deterministic SOP evaluation from sop_rules.json. 15 steps, channel gating, threshold checks. No LLM involved.</p>
+          </div>
+        </div>
+        <div class="arrow-down">↓</div>
+        <div class="flow-row">
+          <div class="flow-box output">
+            <h3>6. Output</h3>
+            <p>Evaluation report, email draft, QA review, or Q&A answer. PII restored for ops staff view. All outputs are drafts for human review.</p>
+          </div>
+          <span class="arrow">←</span>
+          <div class="flow-box llm">
+            <h3>5. LLM (Claude)</h3>
+            <p>Explains decisions, drafts emails, answers questions. Uses ONLY RAG context. Never sees raw PII. Never makes decisions.</p>
+          </div>
+          <span class="arrow">←</span>
+          <div class="flow-box rag">
+            <h3>4. RAG Retrieval</h3>
+            <p>ChromaDB vector store, 89 chunks from 21 knowledge base files. Semantic search returns top-k relevant SOP sections.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRIVACY APPROACH -->
+    <div class="section">
+      <h2>Privacy-Conscious Design</h2>
+      <div class="card">
+        <h4>Data Flow with Privacy Filter</h4>
+        <div class="privacy-flow">
+          <div class="pf-step"><strong>Raw Case Data</strong><br>NRIC, Name, DOB, Address</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step" style="border-color: var(--yellow);"><strong>Rules Engine</strong><br>Processes raw data (local)</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step" style="border-color: var(--yellow);"><strong>Privacy Filter</strong><br>Masks PII patterns</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>Claude API</strong><br>Sees only masked data</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>Response</strong><br>PII restored for ops</div>
+        </div>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--dim);">
+          Masked: NRIC (S****123I), Names ([MASKED]), Phones (987***32), Emails (j***@email.com), Addresses ([MASKED_ADDRESS])
+        </p>
+      </div>
+    </div>
+
+    <!-- DECISION TABLE -->
+    <div class="section">
+      <h2>Decision Rules Table (from sop_rules.json)</h2>
+      <div class="card" style="overflow-x: auto;">
+        <h4>SOP-NBIG-STP-001 — Channel Gating & Rule Summary</h4>
+        <table>
+          <thead>
+            <tr><th>Step</th><th>Description</th><th>Rule Type</th><th>QnB</th><th>EzSub</th><th>Hardcopy</th><th>Fail Impact</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1A</td><td>Open Identity Document</td><td>document_exists</td><td><span class="tag tag-skip">Skip</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>1B</td><td>Open Benefit Illustration</td><td>document_exists</td><td><span class="tag tag-skip">Skip</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>1C</td><td>Open Application Form</td><td>document_exists</td><td><span class="tag tag-skip">Skip</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>2A</td><td>MyInfo Consent Timestamp</td><td>consent_timestamp</td><td><span class="tag tag-skip">Skip</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>3A</td><td>Client Search by NRIC</td><td>client_search_nric</td><td><span class="tag tag-skip">Skip</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Refer Ops</td></tr>
+            <tr><td>4A</td><td>Search by Name</td><td>client_record_found</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Refer Ops</td></tr>
+            <tr><td>4B</td><td>Check DOB & Sex</td><td>field_match</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Refer Ops</td></tr>
+            <tr><td>5C</td><td>Validate Key Fields</td><td>field_match</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>7B</td><td>Follow-ups All Resolved</td><td>all_followups_resolved</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td>Further Req</td></tr>
+            <tr><td>8B</td><td>ANB & SA Threshold</td><td>threshold_check</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+            <tr><td>8C</td><td>UW Sub-std</td><td>uw_indicator</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+            <tr><td>8D</td><td>Decline Indicator</td><td>uw_indicator</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+            <tr><td>8E</td><td>Postpone Indicator</td><td>uw_indicator</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+            <tr><td>8F</td><td>Claim Indicator</td><td>uw_indicator</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+            <tr><td>8G</td><td>RCS Trigger Check</td><td>rcs_trigger</td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-pass">Active</span></td><td><span class="tag tag-refer">Refer UW</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DECISION MAPPING -->
+    <div class="section">
+      <h2>Decision Aggregation</h2>
+      <div class="grid">
+        <div class="card">
+          <h4>Decision Priority (highest wins)</h4>
+          <table>
+            <thead><tr><th>Priority</th><th>Decision</th><th>Human Review</th></tr></thead>
+            <tbody>
+              <tr><td>1 (highest)</td><td><span class="tag tag-refer">Refer to UW</span></td><td>Yes</td></tr>
+              <tr><td>2</td><td><span class="tag tag-further">Trigger GNS</span></td><td>Yes</td></tr>
+              <tr><td>3</td><td><span class="tag tag-further">Further Requirements</span></td><td>No</td></tr>
+              <tr><td>4 (lowest)</td><td><span class="tag tag-pass">Standard</span></td><td>No</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h4>LLM Role Boundary</h4>
+          <ul>
+            <li><strong>LLM DOES:</strong> Explain decisions, draft emails, answer SOP queries, summarize QA reviews</li>
+            <li><strong>LLM DOES NOT:</strong> Make decisions, modify data, auto-send emails, override rules engine</li>
+            <li><strong>Rules Engine DOES:</strong> All deterministic checks — field matching, threshold evaluation, follow-up status, UW indicators</li>
+            <li><strong>Privacy Filter DOES:</strong> Mask PII before LLM, restore PII in output for ops staff</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- USE CASES -->
+    <div class="section">
+      <h2>Use Cases</h2>
+      <div class="grid">
+        <div class="card">
+          <h4>UC1: SOP Evaluation (QnB/EzSub CareShield)</h4>
+          <p>Rules engine evaluates case → Claude explains → Ops acts</p>
+          <ul>
+            <li>Input: Case JSON (client fields, follow-ups, UW indicators)</li>
+            <li>Processing: 15-step deterministic rule evaluation</li>
+            <li>Output: Step-by-step report + decision + DotSphere actions</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>UC2: Customer Email Drafting</h4>
+          <p>UW decides → AI drafts empathetic email → Human reviews</p>
+          <ul>
+            <li>Input: Decision type, tone, customer context</li>
+            <li>Processing: Email rules + compliance guardrails</li>
+            <li>Output: Analysis + compliant email draft (no medical disclosure)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>UC3: QA Underwriting Review</h4>
+          <p>QA indicators → Complexity scoring → Risk drivers explained</p>
+          <ul>
+            <li>Input: ICD codes, loadings, exclusions, turnaround time</li>
+            <li>Processing: 7-indicator scoring (deterministic) + Claude explanation</li>
+            <li>Output: Risk level, score breakdown, QA recommendation</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>UC4: SOP Knowledge Q&A</h4>
+          <p>Staff asks → RAG retrieves → Claude answers from SOPs only</p>
+          <ul>
+            <li>Input: Natural language question</li>
+            <li>Processing: Semantic search over 21 KB documents (89 chunks)</li>
+            <li>Output: SOP-grounded answer with references</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SHAREPOINT FLOW -->
+    <div class="section">
+      <h2>SharePoint Integration (Planned)</h2>
+      <div class="card">
+        <h4>Data Flow: SharePoint → AI Brain</h4>
+        <div class="privacy-flow">
+          <div class="pf-step"><strong>SharePoint</strong><br>SOPs, policy docs, guides</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>MS Graph API</strong><br>Pull documents</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>Parse & Chunk</strong><br>PDF/DOCX → text chunks</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>Embed & Index</strong><br>ChromaDB vector store</div>
+          <span class="pf-arrow">→</span>
+          <div class="pf-step"><strong>RAG Query</strong><br>Semantic retrieval</div>
+        </div>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--dim);">
+          Current: Using local knowledge_base/ folder (21 files). Ready to swap to SharePoint when API access is granted.
+          Architecture is identical — only the document source changes.
+        </p>
+      </div>
+    </div>
+
+    <!-- TECH STACK -->
+    <div class="section">
+      <h2>Technology Stack</h2>
+      <div class="grid">
+        <div class="card">
+          <h4>Backend</h4>
+          <ul>
+            <li>Python / Flask — API server</li>
+            <li>Rules Engine — deterministic SOP checks from JSON config</li>
+            <li>ChromaDB — vector store for RAG</li>
+            <li>sentence-transformers — local embeddings (no API cost)</li>
+            <li>Claude API (Sonnet) — explanation & email drafting</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Frontend</h4>
+          <ul>
+            <li>Vanilla HTML/CSS/JS — no framework dependency</li>
+            <li>SSE streaming — real-time response display</li>
+            <li>4 modes: Chat, Evaluate, Draft Email, QA Review</li>
+            <li>LocalStorage — conversation persistence</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

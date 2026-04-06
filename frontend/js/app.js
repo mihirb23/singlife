@@ -36,6 +36,8 @@ const welcomeUploadEl = document.getElementById('welcomeUploadBtn');
 const chatUploadEl   = document.getElementById('chatUploadBtn');
 const modeChatBtn    = document.getElementById('modeChatBtn');
 const modeEvalBtn    = document.getElementById('modeEvalBtn');
+const modeEmailBtn   = document.getElementById('modeEmailBtn');
+const modeQABtn      = document.getElementById('modeQABtn');
 const modeLabelEl    = document.getElementById('modeLabel');
 const chatModeLabelEl = document.getElementById('chatModeLabel');
 
@@ -49,22 +51,42 @@ function setMode(mode) {
   currentMode = mode;
   modeChatBtn.classList.toggle('active', mode === 'chat');
   modeEvalBtn.classList.toggle('active', mode === 'evaluate');
+  modeEmailBtn.classList.toggle('active', mode === 'email');
+  modeQABtn.classList.toggle('active', mode === 'qa');
 
-  const label = mode === 'chat' ? 'Chat' : 'Evaluate';
-  modeLabelEl.textContent = label;
-  chatModeLabelEl.textContent = label;
+  const labels = { chat: 'Chat', evaluate: 'Evaluate', email: 'Draft Email', qa: 'QA Review' };
+  modeLabelEl.textContent = labels[mode] || mode;
+  chatModeLabelEl.textContent = labels[mode] || mode;
 
-  if (mode === 'chat') {
-    userInputEl.placeholder = 'Ask about SOPs, policies, or processes...';
-    chatInputEl.placeholder = 'Ask anything...';
-  } else {
-    userInputEl.placeholder = 'Paste case data (JSON or text) to evaluate against SOP...';
-    chatInputEl.placeholder = 'Paste case data or ask about a specific policy...';
+  const placeholders = {
+    chat: ['Ask about SOPs, policies, or processes...', 'Ask anything...'],
+    evaluate: ['Paste case data (JSON) to evaluate against SOP...', 'Paste case data or ask about a specific policy...'],
+    email: ['Paste email request JSON or describe the decision to communicate...', 'Describe the UW decision to draft an email for...'],
+    qa: ['Paste QA case data (JSON) for underwriting review...', 'Paste QA indicators for review...'],
+  };
+  const ph = placeholders[mode] || placeholders.chat;
+  userInputEl.placeholder = ph[0];
+  chatInputEl.placeholder = ph[1];
+
+  // re-render the conversation list filtered to this mode
+  renderConvList();
+
+  // if current active conversation doesn't belong to this mode, switch to the most recent one that does or create new
+  const activeConv = getActive();
+  if (activeConv && (activeConv.mode || 'chat') !== mode) {
+    const modeConvs = conversations.filter(c => (c.mode || 'chat') === mode);
+    if (modeConvs.length > 0) {
+      switchConversation(modeConvs[0].id);
+    } else {
+      newConversation();
+    }
   }
 }
 
 modeChatBtn.addEventListener('click', () => setMode('chat'));
 modeEvalBtn.addEventListener('click', () => setMode('evaluate'));
+modeEmailBtn.addEventListener('click', () => setMode('email'));
+modeQABtn.addEventListener('click', () => setMode('qa'));
 
 // -- sidebar open/close --
 
@@ -185,7 +207,7 @@ function getActive() { return conversations.find(c => c.id === activeId) || null
 
 function newConversation() {
   const id = `c_${Date.now()}`;
-  conversations.unshift({ id, title: 'New conversation', messages: [], ts: Date.now() });
+  conversations.unshift({ id, title: 'New conversation', messages: [], ts: Date.now(), mode: currentMode });
   activeId = id;
   save();
   renderConvList();
@@ -197,8 +219,10 @@ function newConversation() {
 function deleteConversation(id) {
   conversations = conversations.filter(c => c.id !== id);
   if (activeId === id) {
-    if (conversations.length > 0) {
-      activeId = conversations[0].id;
+    // find the next conversation in the same mode
+    const modeConvs = conversations.filter(c => (c.mode || 'chat') === currentMode);
+    if (modeConvs.length > 0) {
+      activeId = modeConvs[0].id;
       const conv = getActive();
       if (conv && conv.messages.length > 0) { hideWelcome(); renderMessages(conv.messages); }
       else { showWelcome(); renderMessages([]); }
@@ -223,7 +247,28 @@ function switchConversation(id) {
 
 function renderConvList() {
   convListEl.innerHTML = '';
-  conversations.forEach(conv => {
+
+  // update the section label to match the current mode
+  const modeLabels = { chat: 'Chats', evaluate: 'Evaluations', email: 'Email Drafts', qa: 'QA Reviews' };
+  const sectionLabel = document.querySelector('.sidebar-section:first-of-type .sidebar-label');
+  if (sectionLabel) sectionLabel.textContent = modeLabels[currentMode] || 'Chats';
+
+  // filter conversations to only show those matching the current mode
+  const filtered = conversations.filter(conv => {
+    // conversations created before mode tracking default to 'chat'
+    const convMode = conv.mode || 'chat';
+    return convMode === currentMode;
+  });
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'conv-empty';
+    empty.textContent = `No ${(modeLabels[currentMode] || 'chats').toLowerCase()} yet`;
+    convListEl.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach(conv => {
     const el = document.createElement('div');
     el.className = `conv-item${conv.id === activeId ? ' active' : ''}`;
 
@@ -243,7 +288,11 @@ function renderConvList() {
 
     el.appendChild(title);
     el.appendChild(del);
-    el.addEventListener('click', () => switchConversation(conv.id));
+    el.addEventListener('click', () => {
+      // restore the mode this conversation was created in
+      if (conv.mode && conv.mode !== currentMode) setMode(conv.mode);
+      switchConversation(conv.id);
+    });
     convListEl.appendChild(el);
   });
 }
@@ -353,16 +402,21 @@ async function sendMessage(text) {
     let endpoint = `${API_BASE}/api/chat`;
     let payload = { messages: conv.messages, mode: currentMode };
 
-    // in evaluate mode, try to parse input as JSON for the case data
     if (currentMode === 'evaluate') {
       let caseData = userText;
-      try {
-        caseData = JSON.parse(userText);
-      } catch {
-        // not valid json, just send as plain text — claude can handle it
-      }
+      try { caseData = JSON.parse(userText); } catch {}
       endpoint = `${API_BASE}/api/evaluate`;
       payload = { caseData, messages: conv.messages.slice(0, -1) };
+    } else if (currentMode === 'email') {
+      let emailData = { decision_type: 'Decline', customer_name: '[Customer Name]', outcome_summary: userText };
+      try { emailData = JSON.parse(userText); } catch {}
+      endpoint = `${API_BASE}/api/generate-email`;
+      payload = { emailData, messages: conv.messages.slice(0, -1) };
+    } else if (currentMode === 'qa') {
+      let qaData = userText;
+      try { qaData = JSON.parse(userText); } catch {}
+      endpoint = `${API_BASE}/api/qa-review`;
+      payload = { qaData, messages: conv.messages.slice(0, -1) };
     }
 
     const resp = await fetch(endpoint, {

@@ -78,45 +78,22 @@ Cases with multiple ICD codes indicate more complex medical histories:
   F32, F32.9  — Depression codes (1 case)
 
 ====================================================================
-RCS CHECK EVALUATION GUIDELINES
+RCS CHECK EVALUATION — ALL CODES = REFER TO UW
 ====================================================================
 
 When Claim Indicator = Y in a case, the RCS (Risk Claims System) check
-evaluates the ICD codes against the policy terms:
+evaluates the ICD codes. Per the official Singlife RCS_8H_ICD_Groups
+classification:
 
-HIGH RISK (likely refer to UW):
-  - C80 (malignant neoplasm)
-  - F32/F09 (mental health conditions)
-  - I51 (heart disease complications)
-  - E14 (diabetes)
+** ALL ICD CODES = REFER TO UW **
 
-MODERATE RISK (may refer to UW depending on severity/context):
-  - E78 (cholesterol — most common, often leads to exclusion)
-  - I10 (hypertension)
-  - K75 (liver disease)
-  - J45 (asthma)
-  - I77 (arterial disorders)
+There are NO pass codes. Any ICD code presence in a shield claim
+triggers mandatory underwriter review. This applies to all medical,
+lifestyle, and occupational codes without exception.
 
-LOWER RISK (often standard with possible exclusion):
-  - M54 (back pain — most common overall)
-  - D36/D24 (benign neoplasms)
-  - H58/H93 (ear/eye)
-  - L30 (dermatitis)
-  - N73 (pelvic inflammatory)
-  - Z83 (family history only)
-  - R07 (chest pain — symptom only)
-
-NOTE: This classification is derived from observed data patterns in the
-NB.MASTER file. The actual pass/fail determination should be confirmed
-with the UW team (Sharon/Terence) for production use.
-
-For the definitive Pass vs Refer mapping used by the AI rules engine,
+For the complete ICD code mapping with descriptions and categories,
 see: ref_rcs_icd_pass_refer.txt
 
-PASS codes (STP eligible): M54, M95, D36, D24, H58, H93, L30, N73, R07,
-  Z83, Z04, Z68, K59, OC.000
-REFER codes (needs UW review): C80, F32, F32.9, F09, I51, I10, I77, E14,
-  E78, K75, J45, AV.012
-
-Rule: If ANY code in a case = Refer → entire case = Refer to UW
-      If ALL codes = Pass → Standard (STP)
+Source: RCS_8H_ICD_Groups (Singlife official classification, confirmed
+April 2026). This supersedes any previous pass/refer classification
+that was inferred from data patterns.

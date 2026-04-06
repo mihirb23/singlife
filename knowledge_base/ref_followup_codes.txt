@@ -207,6 +207,28 @@ SCREENING (S-series):
 PENDING ITEMS (P-series):
   P1, P2, P3, P5, P7, P8, P13, PNL, P&L
 
+E-PAYMENT / TRANSACTION (from Use Case 2 dataset — 87,191 records):
+  EPM — E-payment (69,265 occurrences — most common code overall)
+  T11 — Transaction type 11 (25,108)
+  SAV — Savings (21,141)
+  PPP — Premium payment processing (17,845)
+  T10 — Transaction type 10 (15,257)
+  T07 — Transaction type 7 (14,510)
+  T09 — Transaction type 9 (13,862)
+  T04 — Transaction type 4 (7,801)
+  T12 — Transaction type 12 (4,701)
+  PUP — Premium update (8,269)
+  PU5 — Premium update 5 (7,613)
+  PU4 — Premium update 4 (4,244)
+
+COMPLIANCE/SCREENING (from Use Case 2 dataset):
+  C09 — Compliance / GNS re-screening (11,936 — triggers GNS decision path)
+  GNS — Government Name Screening (6,035)
+
+NOTIFICATION:
+  N07 — Notification (4,262)
+  A05 — Administrative (4,011)
+
 REPRINTS:
   RP1 — Reprint 1
   RP2 — Reprint 2

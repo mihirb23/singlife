@@ -1,0 +1,132 @@
+================================================================================
+REFERENCE: EMAIL TRIAGE & CLOSED-LOOP CUSTOMER SERVICE RULES
+================================================================================
+Scope: AI Brain issue classification, routing, and learning capture
+Source: OnePager_AI_Brain_Closed_Loop_Customer_Service, Triage I/O samples
+================================================================================
+
+1. PURPOSE
+--------------------------------------------------------------------------------
+The AI Brain acts as an intelligence and coordination layer across Customer
+Service, Underwriting, Operations, and Product. It supports staff by:
+- Drafting accurate and empathetic customer emails
+- Triaging issues to the correct SMEs and Product Owners
+- Converting customer experience into structured knowledge for improvement
+
+The AI Brain does NOT make decisions or execute changes — human
+accountability remains central.
+
+2. THREE TRIAGE LANES
+--------------------------------------------------------------------------------
+
+Lane 1: REAL ISSUE — Route to SME
+- Description: Genuine issue requiring a fix
+- Route to: Relevant SME (Underwriting, IT, Risk, Compliance)
+- Examples: System error, incorrect UW decision, policy data mismatch
+- Trigger: Issue clearly tied to a process or system failure
+
+Lane 2: ALTERNATIVE SOLUTION — Route to Ops/CX
+- Description: Not a system issue but customer needs better communication
+- Route to: Operations or CX team
+- Examples: Customer confused by outcome, needs clearer explanation,
+  process clarity issue
+- Trigger: Customer feedback about communication or understanding
+
+Lane 3: NEW OPPORTUNITY — Route to Product Owner
+- Description: Experience gap indicating potential improvement
+- Route to: Product Owners or Transformation teams
+- Examples: Recurring customer pain point, feature gap, process improvement
+- Trigger: Pattern of similar feedback across multiple customers
+
+3. INPUT SIGNALS FOR TRIAGE
+--------------------------------------------------------------------------------
+| Signal                | Type    | Values                              |
+|----------------------|---------|-------------------------------------|
+| underwriting_outcome  | string  | decline / postpone / counter_offer  |
+| uw_comment_category   | string  | medical / financial / documentation |
+| qnb_rules_triggered   | array   | rule category references            |
+| policy_status          | string  | pending / inforce / completed       |
+| customer_intent        | string  | complaint / question / clarification|
+| customer_emotion       | string  | anxious / confused / upset          |
+| repeat_contact         | boolean | true if customer contacted before   |
+
+4. TRIAGE LOGIC
+--------------------------------------------------------------------------------
+IF customer_intent = "complaint" AND repeat_contact = true:
+  → Lane 1 (Real Issue) — escalate to SME
+  → Knowledge theme: "Recurring issue"
+
+IF customer_intent = "question" OR customer_intent = "clarification":
+  → Lane 2 (Alternative Solution) — improve communication
+  → Knowledge theme: "Outcome clarity"
+
+IF customer_emotion = "confused" AND underwriting_outcome present:
+  → Lane 2 (Alternative Solution) — communication improvement needed
+  → Knowledge theme: "Underwriting communication clarity"
+
+IF pattern detected (3+ similar issues in 30 days):
+  → Lane 3 (New Opportunity) — route to Product Owner
+  → Knowledge theme: "Experience gap"
+
+DEFAULT:
+  → Lane 2 (Alternative Solution) — standard handling
+
+5. GUARDRAILS (NON-NEGOTIABLE)
+--------------------------------------------------------------------------------
+| Guardrail                  | Value | Description                         |
+|---------------------------|-------|-------------------------------------|
+| no_auto_decision           | true  | AI never makes final decisions      |
+| no_auto_send               | true  | Emails always reviewed by human     |
+| human_validation_required  | true  | All triage needs human confirmation |
+| no_PII                     | true  | No personal data in AI outputs      |
+
+6. LEARNING CAPTURE
+--------------------------------------------------------------------------------
+The AI Brain captures structured learning from every interaction:
+
+A) Knowledge Artifact Creation:
+   - Each resolved issue generates a knowledge artifact
+   - Artifacts include: issue type, resolution, knowledge theme
+   - Artifacts are indexed for future retrieval by RAG
+
+B) Pattern Detection:
+   - Recurring themes are flagged for systematic improvement
+   - Customer feedback converted from unstructured to structured data
+   - Patterns feed into the improvement backlog
+
+C) Closed-Loop Cycle:
+   Customer interaction → AI analysis → Email draft + Issue triage →
+   SME/PO action → Outcome measurement → Knowledge update
+
+7. OUTPUT FORMAT
+--------------------------------------------------------------------------------
+The AI produces:
+
+A) Email Draft:
+   - draft_text: Generated empathetic and compliant email
+   - confidence_flags: ["needs_human_review"] (always present)
+
+B) Triage Result:
+   - lane: L1 / L2 / L3
+   - issue_theme: categorised theme
+   - recommended_owner: SME / Ops / CX / Product Owner
+
+C) Learning Capture:
+   - create_knowledge_artifact: true/false
+   - knowledge_theme: structured theme label
+
+8. GOVERNANCE
+--------------------------------------------------------------------------------
+The AI Brain operates within strict guardrails:
+- Does NOT auto-send communications
+- Does NOT auto-change rules
+- Does NOT auto-approve outcomes
+- All recommendations are explainable and auditable
+- Humans remain responsible for reviewing drafts, approving fixes,
+  prioritising initiatives, and owning customer outcomes
+
+9. KEY PRINCIPLE
+--------------------------------------------------------------------------------
+"The AI Brain connects communication rules, automation knowledge, and live
+case context to help staff respond better, route issues faster, and learn
+continuously from customer experience — without removing human accountability."

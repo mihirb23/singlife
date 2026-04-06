@@ -1,0 +1,133 @@
+================================================================================
+PROJECT ASSUMPTIONS, CONSTRAINTS & FUTURE OPTIONS
+================================================================================
+Project: Singlife x NTU veNTUre — AI & Process Automation in Insurance Operations
+Sprint: 2-3 (March–April 2026)
+Status: Learning prototype / POC — NOT production
+================================================================================
+
+1. ASSUMPTIONS
+--------------------------------------------------------------------------------
+
+A) Data Assumptions
+- All data used in this prototype is MOCK / SYNTHETIC data
+- No real customer PII is processed or stored in the system
+- UAT data extractions have been anonymized (hashed NRICs, synthetic names)
+- The 87,191 record UW/Claims dataset uses masked policy numbers and identifiers
+- Follow-up codes and ICD codes are real system codes but not linked to real customers
+
+B) Environment Assumptions
+- System runs on local development machines only (localhost)
+- No deployment to cloud, production, or shared infrastructure
+- Claude API calls go to Anthropic's cloud — no customer PII sent (privacy filter applied)
+- ChromaDB vector store runs locally with persistent storage
+- No integration with live Singlife systems (L400, DotSphere, FileNet, RCS)
+
+C) Knowledge Base Assumptions
+- SOPs and rules are based on documents shared by Singlife Ops (Sharon/Terence)
+- Some follow-up code descriptions are inferred from abbreviations (not officially confirmed)
+- ICD code pass/refer mapping follows the official RCS_8H_ICD_Groups classification
+- Premium calculation tables are not available — Steps 6A-6I are out of scope
+- SharePoint is the planned document source but access is pending — using local files
+
+D) Decision Logic Assumptions
+- Rules engine executes deterministically from sop_rules.json — no hardcoded logic
+- LLM (Claude) explains decisions but does NOT make them
+- Channel gating (QnB/EzSub/Hardcopy) follows the Processing Steps matrix exactly
+- Decision priority: Refer UW > GNS/Compliance > Further Requirements > Standard
+
+2. CONSTRAINTS
+--------------------------------------------------------------------------------
+
+A) Technical Constraints
+- No access to Singlife internal network, VPN, or production systems
+- No SharePoint API credentials (simulated with local file storage)
+- No access to FileNet for document verification (Steps 1A-1C assume documents exist)
+- No access to L400 for real-time field comparison (using UAT data extractions)
+- No access to RCS for live ICD screening (using static ICD code mapping)
+- Claude API requires internet connection and valid API key
+
+B) Regulatory Constraints
+- Must comply with PDPA (Personal Data Protection Act) principles
+- Must comply with MAS (Monetary Authority of Singapore) guidelines
+- No real customer data in any AI prompt or external API call
+- Privacy filter layer masks PII before LLM processing
+- All AI-generated emails are DRAFTS — never auto-sent to customers
+
+C) Scope Constraints
+- Prototype covers QnB and EzSub channels for CareShield (EYA/EYB) products
+- Hardcopy channel has no test data — rules are defined but untested
+- Email drafting covers Decline, Postpone, Counter-offer only
+- QA review scoring uses 7 indicators — may need expansion for production
+- No user authentication or role-based access control in prototype
+
+D) Data Constraints
+- MyInfo consent timestamp not available in UAT case data
+- Premium rate tables not available for validation
+- Some follow-up codes have inferred (not confirmed) descriptions
+- UW/Claims dataset is a snapshot — not real-time data
+
+3. FUTURE OPTIONS
+--------------------------------------------------------------------------------
+
+A) Hosting & Deployment
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| Local hosting | On-premises servers within Singlife | Full data control, PDPA safe | Infrastructure cost, maintenance |
+| AWS Bedrock | Managed AI service with data residency | Scalable, enterprise support | Cloud dependency, cost |
+| Azure OpenAI | Microsoft ecosystem integration | SharePoint native, Copilot | Vendor lock-in |
+| Hybrid | Rules engine on-prem, LLM via API with privacy filter | Best of both, data stays internal | Integration complexity |
+
+Recommended: Hybrid approach — rules engine and data processing on-premises,
+LLM calls via API with privacy filter ensuring no PII leaves the network.
+
+B) Identity & Access
+- Integrate with Singlife SSO (Active Directory / Azure AD)
+- Role-based access: Ops Staff, Underwriter, QA Reviewer, Admin
+- Audit logging for all AI interactions
+- API key management for Claude/LLM access
+
+C) Integration Roadmap
+| Phase | Integration | Description |
+|-------|------------|-------------|
+| Current | Local files | Knowledge base stored locally |
+| Next | SharePoint API | Pull SOPs and documents via Microsoft Graph API |
+| Future | L400 API | Real-time client/policy field comparison |
+| Future | DotSphere API | Automated decision locking |
+| Future | FileNet API | Document existence/readability verification |
+| Future | RCS API | Live ICD screening results |
+
+D) Compliance & Governance
+- PDPA compliance review before any production deployment
+- MAS regulatory assessment for AI in insurance operations
+- Model governance framework for LLM outputs
+- Regular audit of AI decisions vs human outcomes
+- Explainability documentation for every AI recommendation
+
+E) Scalability
+- Current architecture (Rules + RAG + LLM) is reusable for:
+  - Claims processing
+  - Policy servicing
+  - Customer service triage
+  - Appeals handling
+  - Audit support
+- Rules are JSON-configurable — new use cases only need new rule files
+- RAG scales to any number of knowledge base documents
+- Same privacy filter applies to all use cases
+
+4. RISK REGISTER
+--------------------------------------------------------------------------------
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| LLM hallucination | Medium | High | Anti-hallucination prompts, rules engine for decisions |
+| PII exposure via API | Low | Critical | Privacy filter layer, no raw PII to LLM |
+| Incorrect SOP rules | Low | High | Rules from official Singlife docs, knowledge gap log |
+| Regulatory non-compliance | Low | Critical | Assumptions documented, human review required |
+| SharePoint access delay | High | Medium | Local file fallback, architecture ready for swap |
+| API cost overrun | Low | Medium | RAG reduces token usage, caching where possible |
+
+5. KEY PRINCIPLE
+--------------------------------------------------------------------------------
+"This POC is not about choosing Rules vs RAG. It is about proving AI can support
+Ops decisions in a scalable, explainable, and governed way."
+— Sprint Planning Document

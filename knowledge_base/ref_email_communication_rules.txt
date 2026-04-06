@@ -1,0 +1,169 @@
+================================================================================
+REFERENCE: EMAIL COMMUNICATION RULES FOR UW DECISIONS
+================================================================================
+Scope: AI-generated customer email drafts for Decline, Postpone, Counter-offer
+Source: AI_Brain_Test_Case_2_Student_One_Page_Guide, Grading Rubric, Sample I/O
+================================================================================
+
+1. PURPOSE
+--------------------------------------------------------------------------------
+This document defines rules and constraints for AI-generated customer emails
+that communicate underwriting (UW) decisions. The AI does NOT make decisions —
+it only communicates decisions already made by the underwriter.
+All generated emails are DRAFTS for human review and must NEVER be auto-sent.
+
+2. DECISION TYPES AND TONE REQUIREMENTS
+--------------------------------------------------------------------------------
+Decision Type    | Tone           | Regulatory Level | Decision Finality
+-----------------|----------------|------------------|------------------
+Decline          | Empathetic     | High             | Final
+Postpone         | Reassuring     | High             | Temporary
+Counter-offer    | Supportive     | High             | Conditional
+
+3. MANDATORY DISCLOSURE RULES (MUST NOT)
+--------------------------------------------------------------------------------
+The AI MUST NOT disclose or reference:
+- Specific medical conditions, diagnoses, or disease names
+- Test names, lab results, or medical examination findings
+- ICD codes or medical classification codes
+- Internal underwriting logic, thresholds, or rules
+- Internal system names (L400, DotSphere, FileNet)
+- Specific risk factors or risk scoring
+- Names of underwriters or internal staff
+- Specific SA amounts or premium calculations
+
+The AI MUST NOT:
+- Blame the customer or sound judgmental
+- Use clinical, technical, or medical language
+- Sound robotic, impersonal, or system-generated
+- Make promises about future outcomes
+- Provide medical advice or health recommendations
+- Suggest the customer can appeal or overturn the decision (unless explicitly allowed)
+
+4. MANDATORY REQUIREMENTS (MUST)
+--------------------------------------------------------------------------------
+The AI MUST:
+- Be empathetic, respectful, and dignified
+- Use clear, plain language a customer can understand
+- Acknowledge the customer's effort in submitting the application
+- Provide clear next steps where applicable
+- Include customer service contact information
+- Maintain a trained frontliner voice (not system/robot voice)
+- Keep the email concise and readable
+- Explain decisions at principle level only (not detail level)
+
+5. STANDARD EMAIL STRUCTURE
+--------------------------------------------------------------------------------
+All customer emails follow this structure:
+
+A. Greeting
+   "Dear [Customer Name],"
+
+B. Acknowledgement
+   Thank the customer for their time, effort, and patience.
+   Show that the application was reviewed carefully.
+
+C. Decision Communication
+   State the outcome in general, non-clinical terms.
+   - Decline: "we are unable to offer coverage at this time"
+   - Postpone: "we require additional clarification before proceeding"
+   - Counter-offer: "we are able to offer coverage with adjusted terms"
+   Reference "overall assessment" and "current underwriting guidelines" only.
+
+D. Reassurance
+   Assure the customer the decision was made carefully.
+   Express understanding that the outcome may be disappointing.
+
+E. Next Steps
+   - Decline: Offer to explore alternative options
+   - Postpone: Explain that a new application can be submitted when ready
+   - Counter-offer: Explain the adjusted terms clearly
+
+F. Support Offer
+   Direct to customer service team for questions or assistance.
+
+G. Warm Closing
+   "Warm regards,"
+   "[Frontliner Name / Customer Service Team]"
+   "[Company Name]"
+
+6. AS-IS vs TO-BE COMPARISON
+--------------------------------------------------------------------------------
+AS-IS (Production emails — PROBLEMS):
+- Disclose medical conditions: "Diabetes Mellitus complicated with incipient
+  Nephropathy and Atrial Fibrillation on long standing medications"
+- Clinical/technical language: "persistent microalbuminuria", "blood thinning
+  medication", "irregular heartbeat medication"
+- Distressing and overwhelming for the customer
+- Written from underwriter perspective, not customer perspective
+- High complaint risk and PDPA/regulatory risk
+
+TO-BE (AI-generated emails — TARGET):
+- No medical details disclosed
+- Empathetic, warm, frontliner voice
+- Clear and concise
+- Customer feels respected even when outcome is negative
+- Compliant with regulatory requirements
+- Consistent across all communications
+
+VALUE CREATED:
+| Dimension        | AS-IS       | TO-BE          | Value                   |
+|-----------------|-------------|----------------|-------------------------|
+| Regulatory Risk | High        | Low            | Reduced MAS complaint   |
+| Customer Emotion| Distress    | Reassured      | TNPS protection         |
+| Tone            | Clinical    | Human          | Trust                   |
+| Consistency     | Varies      | Standardised   | Scalable CX             |
+| Frontliner Effort| Manual     | AI-assisted    | Productivity            |
+
+7. GRADING RUBRIC (100 points total)
+--------------------------------------------------------------------------------
+Category                    | Max Points | Criteria
+---------------------------|------------|----------------------------------
+Regulatory & Compliance     | 25         | Disclosure control (10), Tone & framing (10), Explainability (5)
+Customer Empathy            | 20         | Acknowledgement (5), Emotional safety (10), Human tone (5)
+CX / TNPS                  | 15         | Respect & dignity (5), Outcome clarity (5), Next steps (5)
+Frontliner Quality          | 15         | Voice (5), Readability (5), Consistency (5)
+Personalisation            | 10         | Customer relevance (5), Boundary control (5)
+AI Design                  | 15         | Input design (5), Output structure (5), Hallucination control (5)
+
+Scoring:
+- Excellent: Full marks
+- Partial: Half marks
+- Poor: Zero marks
+
+8. INPUT PARAMETERS
+--------------------------------------------------------------------------------
+Required inputs for email generation:
+| Parameter          | Type   | Description                           |
+|-------------------|--------|---------------------------------------|
+| decision_type      | string | Decline / Postpone / CounterOffer     |
+| customer_name      | string | Customer's name for greeting          |
+| outcome_summary    | string | General outcome (no medical details)  |
+| tone_required      | string | Empathetic / Reassuring / Supportive  |
+| channel            | string | Advisory / Direct                     |
+| language           | string | English (default)                     |
+
+Optional inputs:
+| Parameter              | Type    | Description                        |
+|-----------------------|---------|------------------------------------|
+| acknowledge_effort     | boolean | Include effort acknowledgement     |
+| support_offer_required | boolean | Include support contact info       |
+| decision_finality      | string  | Final / Temporary / Conditional    |
+
+9. OUTPUT FORMAT
+--------------------------------------------------------------------------------
+The AI must produce two sections:
+
+Section 1: Analysis (internal, for ops review)
+- Decision context and tone assessment
+- Guardrails check (confirm no medical disclosure)
+- Confidence flags
+
+Section 2: Customer Email (for human review before sending)
+- Subject line
+- Full email body following the standard structure
+
+10. KEY PRINCIPLE
+--------------------------------------------------------------------------------
+"The decision does not change — only the customer's experience of the decision
+does. A well-written message can preserve trust even when the outcome is negative."

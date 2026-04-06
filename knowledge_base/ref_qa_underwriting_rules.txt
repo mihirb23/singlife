@@ -1,0 +1,135 @@
+================================================================================
+REFERENCE: QA UNDERWRITING REVIEW SCORING RULES
+================================================================================
+Scope: AI-assisted Quality Assurance review of underwriting results
+Source: AI_Brain_Test_Case_3_Student_QA_Underwriting_Results, Sample Cases
+================================================================================
+
+1. PURPOSE
+--------------------------------------------------------------------------------
+This document defines the scoring rules for AI-assisted QA review of underwriting
+cases. The AI helps QA reviewers understand, explain, and consistently assess
+underwriting outcomes. The AI does NOT approve, reject, or override decisions —
+it supports clearer, more structured review.
+
+2. QA INDICATORS (Input Fields)
+--------------------------------------------------------------------------------
+| Indicator        | Type    | Description                                    |
+|-----------------|---------|------------------------------------------------|
+| icd_cnt          | integer | Number of ICD codes on the case                |
+| icd_codes        | array   | List of ICD codes (e.g., ["F83", "I10"])       |
+| sensitive_icd_flag| boolean| Whether any ICD code is in a sensitive cluster |
+| exclusion_cnt    | integer | Number of exclusions applied                   |
+| loading_max_pct  | integer | Maximum loading percentage applied             |
+| reopen_flag      | integer | Whether case was reopened (0 or 1)             |
+| days_to_issue    | integer | Days from application to issue/decision        |
+| uw_tenure_years  | float   | Years of experience of the handling underwriter|
+
+3. COMPLEXITY SCORING RULES
+--------------------------------------------------------------------------------
+
+A) ICD Count Score:
+   - 0 ICDs    = 0 points
+   - 1-2 ICDs  = +2 points
+   - 3+ ICDs   = +5 points
+
+B) Sensitive ICD Cluster:
+   - If sensitive_icd_flag = true  → +3 points
+   - Sensitive categories: Mental health (F-series: F09, F32, F83),
+     Cancer (C-series: C80), Developmental disorders (F83)
+
+C) Exclusion Count:
+   - 0 exclusions  = 0 points
+   - 1 exclusion   = +1 point
+   - 2+ exclusions = +3 points
+
+D) Loading Level:
+   - 0%       = 0 points
+   - 1-75%    = +1 point
+   - 76-150%  = +2 points
+   - >150%    = +3 points
+
+E) Reopen Case:
+   - If reopen_flag = 1  → +2 points
+
+F) Long Turnaround Time:
+   - If days_to_issue > 90  → +1 point
+
+G) New Underwriter:
+   - If uw_tenure_years < 2  → +1 point
+
+TOTAL COMPLEXITY SCORE = Sum of all above
+
+4. RISK LEVEL CLASSIFICATION
+--------------------------------------------------------------------------------
+| Score Range | Risk Level  | QA Recommendation                              |
+|-------------|-------------|------------------------------------------------|
+| 0-4         | Low         | Standard review — routine QA sampling          |
+| 5-9         | Medium      | Enhanced review — additional scrutiny           |
+| 10+         | High        | Prioritise for detailed QA review              |
+| Special     | Validation  | Decline/Postpone with 0 ICD → flag for doc check|
+
+SPECIAL RULE: If decision = Decline or Postpone AND icd_cnt = 0:
+- Risk level = "Validation" regardless of score
+- Reason: Missing ICD documentation weakens decision defensibility
+- Action: Flag for documentation validation
+
+5. AI OUTPUT FORMAT
+--------------------------------------------------------------------------------
+The AI must produce:
+
+A) QA Summary:
+   - overall_risk_level: Low / Medium / High / Validation
+   - complexity_score: calculated number
+   - primary_risk_drivers: list of factors contributing to score
+   - qa_recommendation: action recommendation
+   - explainability_notes: why this case is complex or needs attention
+
+B) Scoring Breakdown:
+   Show each scoring rule applied with its point contribution.
+
+C) Risk Driver Analysis:
+   Explain in plain language why the case is flagged, referencing
+   specific indicators and their values.
+
+6. SAMPLE CASES
+--------------------------------------------------------------------------------
+
+SAMPLE 1: High Complexity (QA-2026-0451)
+- Decision: Postpone
+- ICD codes: F83, I10, E11, N18 (4 codes, sensitive cluster)
+- Exclusions: 2, Loading: 120%, Reopen: Yes
+- Days to issue: 105, UW tenure: 1.5 years
+- Score: 5 (ICD) + 3 (sensitive) + 3 (exclusions) + 2 (loading) + 2 (reopen) + 1 (turnaround) + 1 (new UW) = 17
+- Risk Level: High
+- Recommendation: Prioritise for detailed QA review
+
+SAMPLE 2: Validation Case (QA-2026-0527)
+- Decision: Decline
+- ICD codes: none (0 codes)
+- Exclusions: 0, Loading: 0%, Reopen: No
+- Days to issue: 15, UW tenure: 6 years
+- Score: 0
+- Risk Level: Validation (Decline without ICD)
+- Recommendation: Flag for documentation validation
+
+7. AI CONSTRAINTS (NON-NEGOTIABLE)
+--------------------------------------------------------------------------------
+The AI Brain MUST NOT:
+- Approve, reject, or override underwriting decisions
+- Change outcomes or set rules
+- Make risk judgments or medical interpretations
+- Introduce new assumptions or reinterpret medical facts
+- Recommend specific UW actions (accept/decline/modify)
+
+The AI Brain MUST:
+- Organise information for QA reviewers
+- Surface patterns and highlight complexity drivers
+- Generate clear, structured explanations
+- Support consistent, objective review
+- Flag cases where documentation may be incomplete
+
+8. KEY PRINCIPLE
+--------------------------------------------------------------------------------
+"AI supports better judgement by making complex decisions easier to review
+and explain — it does not replace human accountability."

@@ -1,0 +1,120 @@
+# UW & Claims Data Statistics Reference
+# Source: Use case 2 (with mock up data).xlsx — 87,191 policy records, 109 columns
+# This is the DSA UW/Claims analytics dataset for Use Cases 1-4
+
+## Dataset Overview
+- Total records: 87,191
+- Total columns: 109
+- Channel: Predominantly FA Partners (99.9%)
+- Products: Life, ILP, Health, CI
+
+## UW Outcome Distribution
+| Outcome | Count | Percentage |
+|---------|-------|-----------|
+| (a) Standard | 86,941 | 99.7% |
+| (b) Revised Terms | 137 | 0.2% |
+| (e) No decision - Withdrawn | 78 | 0.1% |
+| (c) Postponed | 22 | 0.03% |
+| (d) Declined | 13 | 0.01% |
+
+Key insight: 99.7% standard — only 0.3% require non-standard terms.
+Decline + Postpone combined = 35 cases (0.04%).
+
+## Claim Decision Distribution
+| Decision | Count |
+|----------|-------|
+| Admitted | 76,277 |
+| Closed | 7,811 |
+| Rejected | 1,695 |
+| Pending | 1,087 |
+| Withdrawn | 320 |
+
+## Early Claims
+| Flag | Count |
+|------|-------|
+| No | 86,308 |
+| Yes | 501 |
+
+Early claim rate: ~0.6% of policies
+
+## Top 20 ICD Codes (81 unique codes observed)
+| ICD Code | Count | Description |
+|----------|-------|-------------|
+| I10 | 927 | Essential hypertension |
+| D24 | 899 | Non-malignant breast disorders |
+| D36 | 661 | Benign neoplasm (other sites) |
+| Z68 | 611 | BMI underweight/overweight |
+| E14 | 427 | Diabetes (all types) |
+| N73 | 414 | Female pelvic inflammatory disease |
+| I51 | 357 | Heart disease complications |
+| M95 | 356 | Musculoskeletal deformities |
+| E07 | 352 | Other thyroid disorders |
+| M54 | 350 | Back/spine disorders |
+| Z04 | 329 | Examination and observation |
+| H58 | 317 | Eye disorders |
+| F09 | 284 | Mental disorder (unspecified) |
+| K92 | 247 | Digestive disorders |
+| K59 | 246 | Intestinal disorders |
+| Z83 | 223 | Family history |
+| N39 | 211 | Urinary disorders |
+| C80 | 205 | Cancer/malignancy |
+| J45 | 182 | Asthma |
+| R94 | 172 | Abnormal tests |
+
+## Top 20 Follow-Up Codes (288 unique codes observed)
+| Code | Count | Category |
+|------|-------|----------|
+| EPM | 69,265 | E-payment |
+| T11 | 25,108 | Transaction |
+| SAV | 21,141 | Savings |
+| PPP | 17,845 | Premium payment |
+| T10 | 15,257 | Transaction |
+| T07 | 14,510 | Transaction |
+| T09 | 13,862 | Transaction |
+| C09 | 11,936 | Compliance/GNS |
+| PUP | 8,269 | Premium update |
+| T04 | 7,801 | Transaction |
+| PU5 | 7,613 | Premium update |
+| LIA | 6,434 | Liability/Additional info |
+| GNS | 6,035 | Government Name Screening |
+| PAC | 5,758 | Pending Admin Completion |
+| B54 | 5,738 | Benefit Review |
+| T12 | 4,701 | Transaction |
+| LOD | 4,554 | Documents Outstanding |
+| N07 | 4,262 | Notification |
+| PU4 | 4,244 | Premium update |
+| A05 | 4,011 | Administrative |
+
+Note: This dataset has 288 unique FUP codes vs 93 in the NB.MASTER extraction.
+C09 (Compliance) appears 11,936 times — significant compliance screening volume.
+
+## Loading Distribution (1,110 cases with non-zero loading)
+| Band | Count |
+|------|-------|
+| 76-150% | 653 |
+| >150% | 457 |
+
+No cases in the 1-75% band in this dataset.
+
+## Reopen Cases
+| Flag | Count |
+|------|-------|
+| Not Reopen Case | 85,572 |
+| Reopen Case | 1,619 (1.9%) |
+
+## High-Complexity Cases (ICD >= 3 AND Loading > 100%)
+Total: 69 cases
+These are prime candidates for QA review.
+
+## Key Data Columns Relevant to AI System
+### For QA Review (Use Case 3):
+- ICD_CNT, ICDS, EXC_CNT, EXCS, LOADING1_MAX, Reopen Cases Flag
+- DAYSTOISSUE, UWID, UW_OUTCOME1, UW_OUTCOME2
+
+### For Email Drafting (Use Case 2):
+- Claim Decision, Type of Claim, UW_OUTCOME1
+- Condition Grouping (NOT to be disclosed to customer)
+
+### For Analytics (DSA Prompters):
+- All claim fields, BMI data, Disclosure data, Channel, F2F indicator
+- Early Claim flag, AGE_NEXTBDAY, Product Group
