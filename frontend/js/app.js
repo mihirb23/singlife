@@ -610,7 +610,7 @@ function flattenObj(obj, prefix = '') {
 
 function exportAsJson(content, mode) {
   const data = responseToStructured(content, mode);
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
   downloadBlob(blob, getExportFilename(mode) + '.json');
 }
 
@@ -628,7 +628,9 @@ function exportAsCsv(content, mode) {
         ? `"${val.replace(/"/g, '""')}"` : val;
     }).join(','));
   }
-  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  // UTF-8 BOM so Excel correctly reads special characters (em dash, arrows, etc.)
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csvLines.join('\n')], { type: 'text/csv;charset=utf-8' });
   downloadBlob(blob, getExportFilename(mode) + '.csv');
 }
 

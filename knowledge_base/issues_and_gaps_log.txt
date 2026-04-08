@@ -1,0 +1,118 @@
+================================================================================
+SINGLIFE AI OPS — ISSUES & KNOWLEDGE GAPS LOG
+================================================================================
+Last updated: 2026-04-08
+Maintained by: NTU Team (Mihir)
+Purpose: Track all issues, knowledge gaps, and open questions for SME clarification.
+         Items marked [ASK MAY/SHARON] need input from Singlife team.
+         Items marked [FIX] need code/config changes by NTU team.
+         Items marked [DEFERRED] are out of current scope.
+================================================================================
+
+
+--- OPEN ISSUES (Need action) ---
+
+KG-001 | RCS ICD Pass/Fail Mapping Not Officially Confirmed [ASK MAY/SHARON]
+  Date: 2026-03-31
+  SOP Step: 8H
+  Issue: Current mapping says ALL ICD codes = Refer to UW (no pass codes).
+         This is derived from observed data, not official UW team confirmation.
+  Risk: If a new unknown ICD code appears, AI defaults to Refer (conservative)
+        which may cause unnecessary UW referrals.
+  Action: Request UW team to validate the pass/refer mapping and provide the
+          official RCS ICD code list used in production.
+
+KG-002 | Follow-Up Code Definitions Incomplete [ASK MAY/SHARON]
+  Date: 2026-03-31
+  SOP Step: 7B
+  Issue: Only ~15 of 93 observed follow-up codes have confirmed definitions.
+         CSL and C09 are confirmed but most B-series, S-series, Q-series codes
+         have inferred descriptions only.
+  Risk: AI can detect outstanding codes but can't explain WHY they were raised
+        or what specific action resolves them.
+  Action: Request top 20 follow-up code mapping with: business description,
+          trigger condition, resolution action, responsible team.
+
+KG-003 | MyInfo Consent Timestamp Not in UAT Data [ASK MAY/SHARON]
+  Date: 2026-03-31
+  SOP Step: 2A
+  Issue: UAT data extraction doesn't include MyInfo consent timestamp.
+         Step 2A needs this for EzSub/Hardcopy validation.
+  Risk: Can't test Step 2A with real data for EzSub channel.
+  Action: Provide mock consent timestamps in test data, or confirm this step
+          should be simulated with synthetic values.
+
+KG-005 | NRIC Search 0 or >1 Results — Resolution Path Unclear [ASK MAY/SHARON]
+  Date: 2026-03-31
+  SOP Step: 3A
+  Issue: SOP says 0 or >1 results = Exception → Refer Ops. But doesn't document
+         HOW ops resolves: merge/void for >1? New client creation for 0?
+  Risk: AI flags correctly but can't guide ops on resolution steps.
+  Action: Document ops resolution workflow for >1 matches and 0 matches.
+
+KG-007 | ANB/SA Threshold Boundary Cases Ambiguous [ASK MAY/SHARON]
+  Date: 2026-03-31
+  SOP Step: 8B
+  Issue: Thresholds say ">$6000" and ">$5000" — unclear if these are inclusive
+         or exclusive. Edge case: SA=$6000 and ANB=31 is ambiguous.
+  Risk: Boundary cases may produce incorrect results.
+  Action: Confirm whether thresholds are >= (inclusive) or > (exclusive).
+
+KG-008 | QnB Channel — What Happens When 8G Passes But 8H Is Skipped? [ASK MAY/SHARON]
+  Date: 2026-04-08 (found during Chat testing)
+  SOP Step: 8G → 8H
+  Issue: For QnB, Step 8H (RCS checks) is skipped (channel gating = N).
+         But if a QnB case has only Claim Ind = Y and all others = N,
+         Step 8G passes and should proceed to 8H — which is skipped.
+         The fallback decision for this scenario is not documented.
+  Risk: QnB cases with Claim Ind = Y may get stuck without a clear decision path.
+  Action: Ask Sharon/May — should QnB cases with Claim Ind = Y and no other
+          indicators be auto-referred to UW, or is there a different path?
+
+KG-009 | RCS Returns Empty (No ICD Codes) — Decision Not Specified [ASK MAY/SHARON]
+  Date: 2026-04-08 (found during Chat testing)
+  SOP Step: 8H
+  Issue: If Claim Ind = Y and RCS is triggered but returns NO ICD codes
+         (empty result), the SOP doesn't specify the decision.
+         All docs say "ICD found = Refer" but don't cover "no ICD found".
+  Risk: Undefined behavior for edge case. AI currently flags for human review.
+  Action: Ask Sharon/May — if RCS returns no ICD codes, is the decision
+          Standard (proceed) or still Refer to UW?
+
+KG-010 | Automation Trigger Meaning Unclear [ASK MAY/SHARON]
+  Date: 2026-04-08 (found during TC-09 comparison with manager output)
+  SOP Step: 9A
+  Issue: Manager's expected output shows automation_trigger = "Yes" for TC-09
+         (StandardWithFurtherRequirements). Our system says "No" because the
+         case isn't fully clean.
+  Ambiguity: Does "Yes" mean "auto-approve the case" (our interpretation)
+             or "trigger Power Automate to handle the follow-up workflow"
+             (manager's possible interpretation)?
+  Risk: Output mismatch with manager's expected format.
+  Action: Clarify with May — does automation_trigger mean "case is auto-approved"
+          or "automation can handle the next action (e.g. send follow-up letter)"?
+
+
+--- DEFERRED ITEMS (Out of current scope) ---
+
+KG-004 | Premium Rate Tables Not Available [DEFERRED]
+  Date: 2026-03-31
+  SOP Step: 6A-6I
+  Issue: Steps 6A-6I are NA for all channels currently. If premium validation
+         is added to scope, need the CareShield premium rate tables.
+  Action: Request if scope expands to include premium checks.
+
+KG-006 | No Hardcopy Channel Test Data [DEFERRED]
+  Date: 2026-03-31
+  Issue: UAT data only covers QnB and EzSub. Hardcopy channel untested.
+  Action: Provide Hardcopy test cases if brought into scope.
+
+
+--- RESOLVED ITEMS ---
+
+(none yet — all items are still open or deferred)
+
+
+================================================================================
+END OF LOG
+================================================================================
