@@ -1,0 +1,2 @@
+test_case_id,channel,policy number,overall_decision,ops_outcome,automation_trigger,outstanding_followups,steps_failed,decision,decision_reason
+TC-09,QnB,G0403220,StandardWithFurtherRequirements,Keep case pending; request/resolve outstanding follow-ups before locking decision.,Yes,CSL:O,7B,Block,Outstanding pending PF. Step 7B7C unresolved PF ? Block.

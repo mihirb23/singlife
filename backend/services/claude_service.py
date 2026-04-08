@@ -410,80 +410,98 @@ class InsuranceAssistant:
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error:** {str(e)}"
 
+    def _load_qa_scoring_config(self) -> dict:
+        """load QA scoring rules from qa_scoring_rules.json"""
+        config_path = KB_DIR / 'qa_scoring_rules.json'
+        try:
+            return json.loads(config_path.read_text(encoding='utf-8'))
+        except Exception as e:
+            logger.error(f"Failed to load QA scoring config: {e}")
+            return {}
+
     def _calculate_qa_score(self, qa_data: dict) -> dict:
-        """Calculate QA complexity score from indicators using ref_qa_underwriting_rules scoring."""
+        """Calculate QA complexity score — all thresholds, points, and risk levels
+        read from qa_scoring_rules.json. Zero hardcoded business logic."""
+        config = self._load_qa_scoring_config()
+        if not config:
+            return {"error": "QA scoring config not found", "complexity_score": 0, "risk_level": "Unknown"}
+
         icd_cnt = qa_data.get('icd_cnt', len(qa_data.get('icd_codes', [])))
-        sensitive = qa_data.get('sensitive_icd_flag', False)
-        exclusions = qa_data.get('exclusion_cnt', 0)
-        loading = qa_data.get('loading_max_pct', 0)
-        reopen = qa_data.get('reopen_flag', 0)
-        days = qa_data.get('days_to_issue', 0)
-        tenure = qa_data.get('uw_tenure_years', 10)
         decision = qa_data.get('decision', '')
 
-        # auto-detect sensitive ICD if not provided
+        # auto-detect sensitive ICD from config's sensitive code list
+        sensitive = qa_data.get('sensitive_icd_flag', False)
         if not sensitive and qa_data.get('icd_codes'):
-            sensitive_codes = {'F09', 'F32', 'F32.9', 'F83', 'C80'}
+            sensitive_codes = set(config.get('sensitive_icd_codes', []))
             sensitive = any(c in sensitive_codes for c in qa_data['icd_codes'])
 
         breakdown = []
         score = 0
 
-        # A) ICD Count
-        if icd_cnt == 0:
-            breakdown.append(("ICD Count", 0, f"{icd_cnt} ICDs"))
-        elif icd_cnt <= 2:
-            score += 2; breakdown.append(("ICD Count", 2, f"{icd_cnt} ICDs"))
+        # evaluate each scoring indicator from config
+        for indicator in config.get('scoring_indicators', []):
+            label = indicator['label']
+            input_field = indicator['input_field']
+            ind_type = indicator['type']
+
+            if ind_type == 'range':
+                value = qa_data.get(input_field, 0)
+                if input_field == 'icd_cnt':
+                    value = icd_cnt
+                matched = False
+                for r in indicator.get('ranges', []):
+                    if r['min'] <= value <= r['max']:
+                        pts = r['points']
+                        score += pts
+                        detail = r['detail_template'].replace('{value}', str(value))
+                        breakdown.append((label, pts, detail))
+                        matched = True
+                        break
+                if not matched:
+                    breakdown.append((label, 0, str(value)))
+
+            elif ind_type == 'boolean':
+                value = qa_data.get(input_field, False)
+                if input_field == 'sensitive_icd_flag':
+                    value = sensitive
+                if value:
+                    pts = indicator['points_if_true']
+                    score += pts
+                    breakdown.append((label, pts, indicator['detail_if_true']))
+
+            elif ind_type == 'threshold':
+                value = qa_data.get(input_field, 0)
+                threshold = indicator['threshold']
+                op = indicator['operator']
+                exceeded = False
+                if op == '>' and value > threshold:
+                    exceeded = True
+                elif op == '<' and value < threshold:
+                    exceeded = True
+                elif op == '>=' and value >= threshold:
+                    exceeded = True
+                elif op == '<=' and value <= threshold:
+                    exceeded = True
+                if exceeded:
+                    pts = indicator['points_if_exceeded']
+                    score += pts
+                    detail = indicator['detail_template'].replace('{value}', str(value))
+                    breakdown.append((label, pts, detail))
+
+        # check validation rule from config
+        val_rule = config.get('validation_rule', {})
+        if val_rule and decision.lower() in ('decline', 'postpone') and icd_cnt == 0:
+            risk_level = val_rule['level']
+            recommendation = val_rule['recommendation']
         else:
-            score += 5; breakdown.append(("ICD Count", 5, f"{icd_cnt} ICDs (3+)"))
-
-        # B) Sensitive ICD
-        if sensitive:
-            score += 3; breakdown.append(("Sensitive ICD Cluster", 3, "Sensitive codes present"))
-
-        # C) Exclusions
-        if exclusions == 0:
-            breakdown.append(("Exclusions", 0, "None"))
-        elif exclusions == 1:
-            score += 1; breakdown.append(("Exclusions", 1, f"{exclusions} exclusion"))
-        else:
-            score += 3; breakdown.append(("Exclusions", 3, f"{exclusions} exclusions (2+)"))
-
-        # D) Loading
-        if loading == 0:
-            breakdown.append(("Loading Level", 0, "0%"))
-        elif loading <= 75:
-            score += 1; breakdown.append(("Loading Level", 1, f"{loading}% (1-75%)"))
-        elif loading <= 150:
-            score += 2; breakdown.append(("Loading Level", 2, f"{loading}% (76-150%)"))
-        else:
-            score += 3; breakdown.append(("Loading Level", 3, f"{loading}% (>150%)"))
-
-        # E) Reopen
-        if reopen:
-            score += 2; breakdown.append(("Reopen Case", 2, "Case reopened"))
-
-        # F) Turnaround
-        if days > 90:
-            score += 1; breakdown.append(("Long Turnaround", 1, f"{days} days (>90)"))
-
-        # G) New UW
-        if tenure < 2:
-            score += 1; breakdown.append(("New Underwriter", 1, f"{tenure} years (<2)"))
-
-        # Risk level
-        if decision.lower() in ('decline', 'postpone') and icd_cnt == 0:
-            risk_level = "Validation"
-            recommendation = "Flag for documentation validation — Decline/Postpone without ICD weakens defensibility"
-        elif score >= 10:
-            risk_level = "High"
-            recommendation = "Prioritise for detailed QA review"
-        elif score >= 5:
-            risk_level = "Medium"
-            recommendation = "Enhanced review — additional scrutiny recommended"
-        else:
+            # determine risk level from config thresholds (sorted high to low)
             risk_level = "Low"
-            recommendation = "Standard review — routine QA sampling"
+            recommendation = "Standard review"
+            for level in config.get('risk_levels', []):
+                if score >= level['min_score']:
+                    risk_level = level['level']
+                    recommendation = level['recommendation']
+                    break
 
         return {
             "complexity_score": score,

@@ -110,24 +110,22 @@ def execute_document_exists(c: dict, step_cfg: dict) -> StepResult:
     step_id = step_cfg["_id"]
     desc = step_cfg["description"]
     doc_field = step_cfg.get("document", "")
+    truthy = step_cfg.get("truthy_values", [])
 
-    # check if case data has a flag for this document
     val = c.get(f"{doc_field}_exists") or c.get(doc_field)
 
-    # if field not provided in case data, assume available for prototype
-    # (real system would check FileNet API)
     if val is None:
         return StepResult(step_id, desc, "Pass",
                           f"Document availability assumed (metadata not in case data)",
                           confidence="Medium")
 
     val_str = str(val).strip().lower()
-    if val_str in ("true", "yes", "1", "y", "exists"):
+    if val_str in truthy:
         return StepResult(step_id, desc, "Pass", f"Document available: {doc_field}")
     return StepResult(step_id, desc, "Fail",
                       f"Document missing: {doc_field}",
-                      decision_impact=step_cfg.get("fail_impact", "Further Requirements"),
-                      recommended_action="Create follow-up for missing document")
+                      decision_impact=step_cfg["fail_impact"],
+                      recommended_action=step_cfg.get("fail_recommended_action"))
 
 
 def execute_consent_timestamp(c: dict, step_cfg: dict) -> StepResult:
@@ -145,7 +143,7 @@ def execute_consent_timestamp(c: dict, step_cfg: dict) -> StepResult:
         return StepResult(step_id, desc, "Pass",
                           "MyInfo consent timestamp not in case data — assumed valid for prototype",
                           confidence="Low",
-                          recommended_action="Verify MyInfo consent form in FileNet")
+                          recommended_action=step_cfg.get("missing_recommended_action"))
 
     if not submission_date:
         return StepResult(step_id, desc, "Manual Review",
@@ -181,8 +179,8 @@ def execute_consent_timestamp(c: dict, step_cfg: dict) -> StepResult:
         else:
             return StepResult(step_id, desc, "Fail",
                               f"Consent expired — {age_days} days old (limit: {max_days})",
-                              decision_impact=step_cfg.get("fail_impact", "Further Requirements"),
-                              recommended_action="Request new MyInfo consent from customer")
+                              decision_impact=step_cfg["fail_impact"],
+                              recommended_action=step_cfg.get("fail_recommended_action"))
     except Exception as e:
         return StepResult(step_id, desc, "Manual Review",
                           f"Error validating consent: {e}", confidence="Low")
@@ -200,7 +198,7 @@ def execute_client_search_nric(c: dict, step_cfg: dict) -> StepResult:
     if not sub_nric:
         return StepResult(step_id, desc, "Fail",
                           "NRIC not provided in submission data",
-                          decision_impact=step_cfg.get("fail_impact", "Refer Ops"))
+                          decision_impact=step_cfg["fail_impact"])
 
     if not l400_nric:
         return StepResult(step_id, desc, "Manual Review",
@@ -213,8 +211,8 @@ def execute_client_search_nric(c: dict, step_cfg: dict) -> StepResult:
     else:
         return StepResult(step_id, desc, "Fail",
                           f"NRIC mismatch: submitted {c.get('sub_nric')} vs L400 {c.get('l400_nric')}",
-                          decision_impact=step_cfg.get("fail_impact", "Refer Ops"),
-                          recommended_action="Verify client identity — possible wrong NRIC entry")
+                          decision_impact=step_cfg["fail_impact"],
+                          recommended_action=step_cfg.get("fail_recommended_action"))
 
 
 def execute_client_record_found(c: dict, step_cfg: dict) -> StepResult:
@@ -224,28 +222,24 @@ def execute_client_record_found(c: dict, step_cfg: dict) -> StepResult:
     if c["client_no"]:
         return StepResult(step_id, desc, "Pass", f"Client {c['client_no']} found on L400")
     return StepResult(step_id, desc, "Fail", "No client record found",
-                      decision_impact=step_cfg.get("fail_impact", "Refer Ops"))
+                      decision_impact=step_cfg["fail_impact"])
 
 
 def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
-    """rule: field_match — compares submitted fields against L400 fields"""
+    """rule: field_match — compares submitted fields against L400 fields.
+    field mapping comes from step config in sop_rules.json."""
     step_id = step_cfg["_id"]
     desc = step_cfg["description"]
     fields_to_check = step_cfg.get("fields", [])
+    cfg_field_map = step_cfg.get("field_mapping", {})
     mismatches = []
     matched = []
 
-    field_map = {
-        "dob": ("sub_dob", "l400_dob", True),
-        "sex": ("sub_sex", "l400_sex", False),
-        "nationality": ("sub_nationality", "l400_nationality", False),
-        "nric": ("sub_nric", "l400_nric", False),
-        "name": (None, None, False),  # handled separately
-    }
-
     for field in fields_to_check:
-        if field == "name":
-            # check surname + given name, or combined name field
+        fm = cfg_field_map.get(field, {})
+
+        # name matching is a special type — compares surname + given name
+        if fm.get("type") == "name_match":
             name_checked = False
             if c["sub_surname"] and c["l400_surname"]:
                 if norm_str(c["sub_surname"]) != norm_str(c["l400_surname"]):
@@ -267,9 +261,12 @@ def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
                     matched.append("Name")
             continue
 
-        if field not in field_map:
+        # standard field comparison — keys come from config
+        sub_key = fm.get("sub_key")
+        l400_key = fm.get("l400_key")
+        is_date = fm.get("is_date", False)
+        if not sub_key or not l400_key:
             continue
-        sub_key, l400_key, is_date = field_map[field]
         sub_val = c.get(sub_key)
         l400_val = c.get(l400_key)
         if sub_val and l400_val:
@@ -287,8 +284,8 @@ def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
                           f"All fields match: {', '.join(matched)}")
     return StepResult(step_id, desc, "Fail",
                       f"Mismatch: {'; '.join(mismatches)}",
-                      decision_impact=step_cfg.get("fail_impact", "Further Requirements"),
-                      recommended_action="Flag for human verification — do not auto-correct")
+                      decision_impact=step_cfg["fail_impact"],
+                      recommended_action=step_cfg.get("fail_recommended_action"))
 
 
 def execute_all_followups_resolved(c: dict, step_cfg: dict) -> StepResult:
@@ -307,20 +304,22 @@ def execute_all_followups_resolved(c: dict, step_cfg: dict) -> StepResult:
                 parsed.append({"code": code.strip(), "status": status.strip()})
         followups = parsed
 
+    resolved_status = step_cfg.get("resolved_status", "R")
+
     if not followups:
         return StepResult(step_id, desc, "Pass", "No follow-up codes present")
 
-    outstanding = [f for f in followups if str(f.get("status", "")).upper() != "R"]
-    resolved = [f for f in followups if str(f.get("status", "")).upper() == "R"]
+    outstanding = [f for f in followups if str(f.get("status", "")).upper() != resolved_status]
+    resolved = [f for f in followups if str(f.get("status", "")).upper() == resolved_status]
 
     if not outstanding:
-        codes = ", ".join(f"{f['code']}:R" for f in resolved)
+        codes = ", ".join(f"{f['code']}:{resolved_status}" for f in resolved)
         return StepResult(step_id, desc, "Pass", f"All resolved: {codes}")
 
     codes = ", ".join(f"{f['code']}:{f['status']}" for f in outstanding)
     return StepResult(step_id, desc, "Fail", f"Outstanding: {codes}",
-                      decision_impact=step_cfg.get("fail_impact", "Further Requirements"),
-                      recommended_action="Resolve outstanding follow-ups before locking case")
+                      decision_impact=step_cfg["fail_impact"],
+                      recommended_action=step_cfg.get("fail_recommended_action"))
 
 
 def execute_threshold_check(c: dict, step_cfg: dict) -> StepResult:
@@ -333,7 +332,7 @@ def execute_threshold_check(c: dict, step_cfg: dict) -> StepResult:
     if anb is None or sa is None:
         return StepResult(step_id, desc, "Manual Review",
                           f"Missing data — ANB: {anb}, SA: {sa}", confidence="Low",
-                          recommended_action="Check L400 Client UW Inquiries screen")
+                          recommended_action=step_cfg.get("missing_recommended_action"))
 
     anb = int(anb)
     sa = float(sa)
@@ -341,11 +340,10 @@ def execute_threshold_check(c: dict, step_cfg: dict) -> StepResult:
     # evaluate each threshold from the json config
     for threshold in step_cfg.get("thresholds", []):
         condition = threshold["condition"]
-        # safely evaluate the condition using the case values
         if eval_condition(condition, anb, sa):
             return StepResult(step_id, desc, threshold["result"],
                               f"{threshold['label']} (ANB={anb}, SA=${sa:,.0f})",
-                              decision_impact=step_cfg.get("fail_impact", "Refer UW"))
+                              decision_impact=step_cfg["fail_impact"])
 
     return StepResult(step_id, desc, "Pass",
                       f"ANB {anb}, SA ${sa:,.0f} — within limits")
@@ -380,36 +378,39 @@ def execute_uw_indicator(c: dict, step_cfg: dict) -> StepResult:
     if val_upper in pass_vals:
         return StepResult(step_id, desc, "Pass", f"{label} = {val} — Continue")
     elif val_upper in fail_vals:
-        return StepResult(step_id, desc, "Refer UW", f"{label} = {val} — Refer to UW",
-                          decision_impact=step_cfg.get("fail_impact", "Refer UW"))
+        return StepResult(step_id, desc, step_cfg["fail_impact"], f"{label} = {val} — {step_cfg['fail_impact']}",
+                          decision_impact=step_cfg["fail_impact"])
     else:
         return StepResult(step_id, desc, "Manual Review",
                           f"{label} = {val} — unexpected value", confidence="Low")
 
 
 def execute_rcs_trigger(c: dict, step_cfg: dict) -> StepResult:
-    """rule: rcs_trigger — checks if only Claim Ind is Y while all others are N"""
+    """rule: rcs_trigger — checks if only the trigger field is flagged while all others are clear.
+    trigger value, clear values, and impacts all come from config."""
     step_id = step_cfg["_id"]
     desc = step_cfg["description"]
     trigger_val = norm_str(c.get(step_cfg["trigger_field"]))
+    expected_trigger = step_cfg.get("trigger_value", "y")
+    clear_values = step_cfg.get("clear_values", [])
 
-    if trigger_val != "y":
+    if trigger_val != expected_trigger:
         return StepResult(step_id, desc, "Skip",
-                          "Claim Ind is not Y — step not triggered")
+                          f"{step_cfg.get('label', step_cfg['trigger_field'])} is not {expected_trigger.upper()} — step not triggered")
 
     others_clear = all(
-        norm_str(c.get(f)) in ("n", "a", "")
+        norm_str(c.get(f)) in clear_values
         for f in step_cfg.get("other_fields", [])
     )
 
     if others_clear:
         return StepResult(step_id, desc, "Pass",
-                          "Only Claim Ind = Y, all others N — RCS check required",
-                          decision_impact="RCS Required",
-                          recommended_action="Perform RCS checks on ICD codes")
-    return StepResult(step_id, desc, "Refer UW",
-                      "Claim Ind = Y AND other indicators also flagged — Refer to UW",
-                      decision_impact="Refer UW")
+                          step_cfg.get("pass_condition", "Trigger condition met — further check required"),
+                          decision_impact=step_cfg.get("pass_impact", "RCS Required"),
+                          recommended_action=step_cfg.get("pass_recommended_action"))
+    return StepResult(step_id, desc, step_cfg["fail_impact"],
+                      f"{step_cfg['trigger_field']} flagged AND other indicators also flagged — {step_cfg['fail_impact']}",
+                      decision_impact=step_cfg["fail_impact"])
 
 
 # map rule type strings from json to executor functions
@@ -428,36 +429,83 @@ RULE_EXECUTORS = {
 
 def derive_decision(results: list, rules: dict) -> dict:
     """aggregate step results into a final decision.
-    reads decision conditions from the json config"""
-    has_refer_uw = any(r.decision_impact == "Refer UW" or r.status == "Refer UW" for r in results)
-    has_further_req = any(r.decision_impact == "Further Requirements" for r in results)
-    has_rcs_required = any(r.decision_impact == "RCS Required" for r in results)
-    failed_steps = [r.step_id for r in results if r.status in ("Fail", "Refer UW", "Refer Ops")]
-
-    # check for C09 outstanding
-    has_c09 = any(r.step_id == "7B" and "C09" in r.finding and r.status == "Fail" for r in results)
-
+    ALL business logic reads from sop_rules.json decision_logic section.
+    the engine interprets the config — no hardcoded step IDs, codes, or priorities."""
+    logic = rules.get("decision_logic", {})
     decision_map = rules.get("decision_mapping", {})
 
-    if has_refer_uw:
-        key = "ReferToUW"
-    elif has_c09:
-        key = "TriggerGNS"
-    elif has_further_req:
-        key = "StandardWithFurtherRequirements"
-    else:
-        key = "Standard"
+    # which statuses count as failures — from config
+    fail_statuses = logic.get("fail_statuses", [])
+    failed_steps = [r.step_id for r in results if r.status in fail_statuses]
+
+    # extract outstanding follow-ups from the configured follow-up step
+    fup_step_id = logic.get("followup_step_id")
+    outstanding_followups = ""
+    if fup_step_id:
+        for r in results:
+            if r.step_id == fup_step_id and r.status in fail_statuses:
+                outstanding_followups = r.finding.replace("Outstanding: ", "")
+
+    # check if any compliance trigger codes are in the follow-up step finding
+    compliance_codes = logic.get("compliance_trigger_codes", [])
+    has_compliance_hit = False
+    if fup_step_id and compliance_codes:
+        for r in results:
+            if r.step_id == fup_step_id and r.status in fail_statuses:
+                has_compliance_hit = any(code in r.finding for code in compliance_codes)
+
+    # walk the decision priority list from config to find the matching decision
+    key = "Standard"
+    for rule in logic.get("decision_priority", []):
+        condition = rule.get("condition")
+
+        if condition == "any_step_has_impact":
+            impact_val = rule.get("impact_value", "")
+            also_status = rule.get("also_check_status", "")
+            if any(r.decision_impact == impact_val or r.status == also_status for r in results):
+                key = rule["key"]
+                break
+
+        elif condition == "compliance_code_outstanding":
+            if has_compliance_hit:
+                key = rule["key"]
+                break
+
+        elif condition == "default":
+            key = rule["key"]
+            break
 
     cfg = decision_map.get(key, {})
-    can_automate = key == "Standard" and not failed_steps
+
+    # automation rule from config
+    auto_rule = logic.get("automation_rule", "")
+    can_automate = (key == "Standard" and not failed_steps) if auto_rule == "all_steps_pass_and_no_failures" else False
+
+    # decision label and ops_outcome from json config
+    decision_label = cfg.get("decision_label", key)
+    ops_outcome = cfg.get("ops_outcome_detail", cfg.get("workflow_action", key))
+
+    # build decision_reason dynamically from actual step results
+    if not failed_steps:
+        decision_reason = f"All applicable steps passed, no outstanding issues. Step 9A {decision_label}."
+    else:
+        trigger_parts = []
+        for r in results:
+            if r.step_id in failed_steps:
+                trigger_parts.append(f"{r.finding} (Step {r.step_id})")
+        step_ids = "/".join(failed_steps)
+        decision_reason = f"{'; '.join(trigger_parts)}. Step {step_ids} -> {decision_label}."
 
     return {
         "overall_decision": key,
-        "ops_outcome": cfg.get("workflow_action", key),
+        "ops_outcome": ops_outcome,
         "dotsphere_steps": cfg.get("dotsphere_steps", []),
         "human_review": cfg.get("human_review", True),
         "automation_trigger": "Yes" if can_automate else "No",
         "steps_failed": failed_steps,
+        "decision": decision_label,
+        "decision_reason": decision_reason,
+        "outstanding_followups": outstanding_followups,
     }
 
 
@@ -530,4 +578,7 @@ def evaluate_case(case_data: dict) -> dict:
         "dotsphere_steps": decision["dotsphere_steps"],
         "automation_trigger": decision["automation_trigger"],
         "steps_failed": decision["steps_failed"],
+        "decision": decision["decision"],
+        "decision_reason": decision["decision_reason"],
+        "outstanding_followups": decision["outstanding_followups"],
     }

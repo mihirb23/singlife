@@ -589,6 +589,42 @@ body { display: flex; height: 100vh; overflow: hidden; }
 .msg-body a { color: #93c5fd; text-decoration: none; }
 .msg-body a:hover { text-decoration: underline; }
 
+/* export bar on assistant messages */
+.msg-export-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 34px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.export-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.export-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-l);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.export-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
 /* typing cursor animation */
 .typing-cursor {
   display: inline-block;

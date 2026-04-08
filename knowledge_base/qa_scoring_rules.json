@@ -1,0 +1,92 @@
+{
+  "config_id": "QA-SCORING-001",
+  "version": "Sprint 2 — 2026-04-08",
+  "description": "QA underwriting complexity scoring rules — all thresholds and point values configurable",
+
+  "sensitive_icd_codes": ["F09", "F32", "F32.9", "F83", "C80"],
+
+  "scoring_indicators": [
+    {
+      "id": "icd_count",
+      "label": "ICD Count",
+      "input_field": "icd_cnt",
+      "type": "range",
+      "ranges": [
+        { "min": 0, "max": 0, "points": 0, "detail_template": "{value} ICDs" },
+        { "min": 1, "max": 2, "points": 2, "detail_template": "{value} ICDs" },
+        { "min": 3, "max": 999, "points": 5, "detail_template": "{value} ICDs (3+)" }
+      ]
+    },
+    {
+      "id": "sensitive_icd",
+      "label": "Sensitive ICD Cluster",
+      "input_field": "sensitive_icd_flag",
+      "type": "boolean",
+      "points_if_true": 3,
+      "detail_if_true": "Sensitive codes present"
+    },
+    {
+      "id": "exclusions",
+      "label": "Exclusions",
+      "input_field": "exclusion_cnt",
+      "type": "range",
+      "ranges": [
+        { "min": 0, "max": 0, "points": 0, "detail_template": "None" },
+        { "min": 1, "max": 1, "points": 1, "detail_template": "{value} exclusion" },
+        { "min": 2, "max": 999, "points": 3, "detail_template": "{value} exclusions (2+)" }
+      ]
+    },
+    {
+      "id": "loading",
+      "label": "Loading Level",
+      "input_field": "loading_max_pct",
+      "type": "range",
+      "ranges": [
+        { "min": 0, "max": 0, "points": 0, "detail_template": "0%" },
+        { "min": 1, "max": 75, "points": 1, "detail_template": "{value}% (1-75%)" },
+        { "min": 76, "max": 150, "points": 2, "detail_template": "{value}% (76-150%)" },
+        { "min": 151, "max": 999999, "points": 3, "detail_template": "{value}% (>150%)" }
+      ]
+    },
+    {
+      "id": "reopen",
+      "label": "Reopen Case",
+      "input_field": "reopen_flag",
+      "type": "boolean",
+      "points_if_true": 2,
+      "detail_if_true": "Case reopened"
+    },
+    {
+      "id": "turnaround",
+      "label": "Long Turnaround",
+      "input_field": "days_to_issue",
+      "type": "threshold",
+      "threshold": 90,
+      "operator": ">",
+      "points_if_exceeded": 1,
+      "detail_template": "{value} days (>90)"
+    },
+    {
+      "id": "new_uw",
+      "label": "New Underwriter",
+      "input_field": "uw_tenure_years",
+      "type": "threshold",
+      "threshold": 2,
+      "operator": "<",
+      "points_if_exceeded": 1,
+      "detail_template": "{value} years (<2)"
+    }
+  ],
+
+  "risk_levels": [
+    { "min_score": 10, "level": "High", "recommendation": "Prioritise for detailed QA review" },
+    { "min_score": 5, "level": "Medium", "recommendation": "Enhanced review — additional scrutiny recommended" },
+    { "min_score": 0, "level": "Low", "recommendation": "Standard review — routine QA sampling" }
+  ],
+
+  "validation_rule": {
+    "condition": "decision in ['decline', 'postpone'] and icd_cnt == 0",
+    "level": "Validation",
+    "recommendation": "Flag for documentation validation — Decline/Postpone without ICD weakens defensibility"
+  }
+}

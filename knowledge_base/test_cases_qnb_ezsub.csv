@@ -1,0 +1,11 @@
+TestCaseID,Scenario,Channel,PolNo,MyInfo_Doc,BI_Doc,AppForm_Doc,Consent_Valid,NRIC_Search_Result_Count,Name_Match,DOB_Match,Sex_Match,Premium_Match,Birthday_Crossover,ERI_Valid,PF_Status,Claim_Indicator,RCS_Result,Decision,Decision_Reason
+TC-01,Happy Path,QnB,G0401259,Y,Y,Y,Y,1,Y,Y,Y,Y,N,Y,All R,N,Pass,Approve,"All mandatory documents valid, single client match, no PF or UW indicators. Step 9A Standard."
+TC-02,Missing MyInfo,QnB,G0401316,N,Y,Y,Y,1,Y,Y,Y,Y,N,Y,All R,N,Pass,Further Requirement,MyInfo identity document missing. Step 1A missing ? FUP.
+TC-03,Invalid Consent,QnB,G0401325,Y,Y,Y,N,1,Y,Y,Y,Y,N,Y,All R,N,Pass,Further Requirement,Consent older than 1 year. Step 2A invalid consent ? FUP.
+TC-04,Multiple Clients,QnB,G0401438,Y,Y,Y,Y,2,Y,Y,Y,Y,N,Y,All R,N,Pass,Refer Ops,NRIC search returned multiple clients. Step 3A exception ? Refer Ops.
+TC-05,Duplicate Client,EzSub,G0401442,Y,Y,Y,Y,1,Y,Y,Y,Y,N,Y,All R,N,Pass,Refer Ops,Duplicate detected and confirmed same person. Step 4A4C requires human patching.
+TC-06,Name Mismatch,QnB,G0401451,Y,Y,Y,Y,1,N,Y,Y,Y,N,Y,All R,N,Pass,Refer Ops,Name sequence mismatch between MyInfo and L400. Step 5A ? Refer Ops.
+TC-07,Birthday Crossover,EzSub,G0402603,Y,Y,Y,Y,1,Y,Y,Y,N,Y,Y,All R,N,Pass,Continue,Premium mismatch explained by birthday crossover. Step 6E ? Continue.
+TC-08,Invalid ERI,QnB,G0402681,Y,Y,Y,Y,1,Y,Y,Y,Y,N,N,All R,N,Pass,Block,Backdating not allowed (ERI invalid). Step 6F ? Block Decision.
+TC-09,Outstanding PF,QnB,G0403220,Y,Y,Y,Y,1,Y,Y,Y,Y,N,Y,Pending,N,Pass,Block,Outstanding pending PF. Step 7B7C unresolved PF ? Block.
+TC-10,UW Claim Indicator,EzSub,G0404704,Y,Y,Y,Y,1,Y,Y,Y,Y,N,Y,All R,Y,Refer,Refer UW,Claim indicator triggered RCS and resulted in Refer. Step 8G8H ? Refer UW.

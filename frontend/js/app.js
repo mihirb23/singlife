@@ -358,6 +358,34 @@ function appendMessage(role, content, streaming = false) {
 
   el.appendChild(hdr);
   el.appendChild(body);
+
+  // add export bar for non-streaming assistant messages
+  if (!streaming && content) {
+    const exportBar = document.createElement('div');
+    exportBar.className = 'msg-export-bar';
+
+    const conv = getActive();
+    const msgMode = conv?.mode || currentMode;
+
+    exportBar.innerHTML = `
+      <span class="export-label">Export</span>
+      <button class="export-btn" data-format="json" title="Download as JSON">JSON</button>
+      <button class="export-btn" data-format="csv" title="Download as CSV">CSV</button>
+      <button class="export-btn" data-format="excel" title="Download as Excel">Excel</button>
+    `;
+
+    exportBar.querySelectorAll('.export-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fmt = btn.dataset.format;
+        if (fmt === 'json') exportAsJson(content, msgMode);
+        else if (fmt === 'csv') exportAsCsv(content, msgMode);
+        else if (fmt === 'excel') exportAsExcel(content, msgMode);
+      });
+    });
+
+    el.appendChild(exportBar);
+  }
+
   messagesEl.appendChild(el);
   return streaming ? body : null;
 }
@@ -469,8 +497,163 @@ async function sendMessage(text) {
   conv.messages.push({ role: 'assistant', content: fullText });
   save();
   isStreaming = false;
+
+  // add export bar to the streamed message
+  const lastMsg = messagesEl.querySelector('.message.assistant:last-child');
+  if (lastMsg && fullText && !fullText.startsWith('**Error')) {
+    const exportBar = document.createElement('div');
+    exportBar.className = 'msg-export-bar';
+    const msgMode = conv.mode || currentMode;
+    exportBar.innerHTML = `
+      <span class="export-label">Export</span>
+      <button class="export-btn" data-format="json" title="Download as JSON">JSON</button>
+      <button class="export-btn" data-format="csv" title="Download as CSV">CSV</button>
+      <button class="export-btn" data-format="excel" title="Download as Excel">Excel</button>
+    `;
+    exportBar.querySelectorAll('.export-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fmt = btn.dataset.format;
+        if (fmt === 'json') exportAsJson(fullText, msgMode);
+        else if (fmt === 'csv') exportAsCsv(fullText, msgMode);
+        else if (fmt === 'excel') exportAsExcel(fullText, msgMode);
+      });
+    });
+    lastMsg.appendChild(exportBar);
+  }
+
   scrollToBottom();
   chatInputEl.focus();
+}
+
+// -- export functions --
+
+function getExportFilename(mode) {
+  const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const prefixes = { chat: 'chat', evaluate: 'sop-evaluation', email: 'email-draft', qa: 'qa-review' };
+  return `${prefixes[mode] || 'export'}_${ts}`;
+}
+
+function extractJsonFromMarkdown(text) {
+  // try to find JSON blocks in the markdown response
+  const jsonBlocks = [];
+  const regex = /```json\s*\n([\s\S]*?)```/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try { jsonBlocks.push(JSON.parse(match[1].trim())); } catch {}
+  }
+  return jsonBlocks;
+}
+
+function responseToStructured(content, mode) {
+  // try to extract structured data from the response
+  const jsonBlocks = extractJsonFromMarkdown(content);
+
+  if (jsonBlocks.length > 0) {
+    // merge all JSON blocks
+    return jsonBlocks.length === 1 ? jsonBlocks[0] : jsonBlocks;
+  }
+
+  // fallback: return as text object
+  return { mode, content, exported_at: new Date().toISOString() };
+}
+
+function flattenForCsv(data) {
+  // convert structured data to flat rows for CSV/Excel
+  if (Array.isArray(data)) {
+    if (data.length === 0) return [{ content: '(empty)' }];
+    // if array of objects, use as-is
+    if (typeof data[0] === 'object') return data.map(item => flattenObj(item));
+    return data.map((item, i) => ({ index: i, value: String(item) }));
+  }
+
+  // if it has sop_rule_evaluation array, use that as the main table
+  if (data.sop_rule_evaluation) {
+    const steps = data.sop_rule_evaluation.map(step => flattenObj(step));
+    // add summary row
+    steps.push({
+      step_id: '---',
+      description: 'OVERALL DECISION',
+      status: data.overall_decision || '',
+      finding: data.ops_outcome || '',
+      confidence: '',
+      decision_impact: data.automation_trigger || '',
+      recommended_action: (data.steps_failed || []).join(', '),
+    });
+    return steps;
+  }
+
+  // if it has breakdown (QA scoring)
+  if (data.breakdown) {
+    return data.breakdown.map(([indicator, points, detail]) => ({
+      indicator, points, detail
+    }));
+  }
+
+  // generic object: one row per key
+  return Object.entries(flattenObj(data)).map(([key, value]) => ({ field: key, value: String(value) }));
+}
+
+function flattenObj(obj, prefix = '') {
+  const result = {};
+  for (const [key, val] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      Object.assign(result, flattenObj(val, fullKey));
+    } else if (Array.isArray(val)) {
+      result[fullKey] = val.join('; ');
+    } else {
+      result[fullKey] = val;
+    }
+  }
+  return result;
+}
+
+function exportAsJson(content, mode) {
+  const data = responseToStructured(content, mode);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, getExportFilename(mode) + '.json');
+}
+
+function exportAsCsv(content, mode) {
+  const data = responseToStructured(content, mode);
+  const rows = flattenForCsv(data);
+  if (!rows.length) return;
+
+  const headers = Object.keys(rows[0]);
+  const csvLines = [headers.join(',')];
+  for (const row of rows) {
+    csvLines.push(headers.map(h => {
+      const val = String(row[h] ?? '');
+      return val.includes(',') || val.includes('"') || val.includes('\n')
+        ? `"${val.replace(/"/g, '""')}"` : val;
+    }).join(','));
+  }
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  downloadBlob(blob, getExportFilename(mode) + '.csv');
+}
+
+function exportAsExcel(content, mode) {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel export library not loaded. Try JSON or CSV instead.');
+    return;
+  }
+  const data = responseToStructured(content, mode);
+  const rows = flattenForCsv(data);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, mode);
+  XLSX.writeFile(wb, getExportFilename(mode) + '.xlsx');
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // -- helpers --

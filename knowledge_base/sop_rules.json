@@ -45,24 +45,30 @@
       "category": "Open Documents",
       "rule": "document_exists",
       "document": "identity_doc",
+      "truthy_values": ["true", "yes", "1", "y", "exists"],
       "pass_condition": "Identity document exists in FileNet",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Create follow-up for missing document"
     },
     "1B": {
       "description": "Open Benefit Illustration on FileNet",
       "category": "Open Documents",
       "rule": "document_exists",
       "document": "benefit_illustration",
+      "truthy_values": ["true", "yes", "1", "y", "exists"],
       "pass_condition": "Benefit Illustration exists and is readable",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Create follow-up for missing document"
     },
     "1C": {
       "description": "Open Application Form on DotSphere",
       "category": "Open Documents",
       "rule": "document_exists",
       "document": "application_form",
+      "truthy_values": ["true", "yes", "1", "y", "exists"],
       "pass_condition": "Application Form exists for comparison",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Create follow-up for missing document"
     },
     "2A": {
       "description": "Check MyInfo Consent Form Timestamp validity",
@@ -70,14 +76,17 @@
       "rule": "consent_timestamp",
       "max_age_days": 365,
       "pass_condition": "MyInfo consent timestamp within 1 year of application date",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Request new MyInfo consent from customer",
+      "missing_recommended_action": "Verify MyInfo consent form in FileNet"
     },
     "3A": {
       "description": "Search client on L400 using NRIC/License",
       "category": "Client Number Search",
       "rule": "client_search_nric",
       "pass_condition": "Exactly 1 client record found by NRIC",
-      "fail_impact": "Refer Ops"
+      "fail_impact": "Refer Ops",
+      "fail_recommended_action": "Verify client identity — possible wrong NRIC entry"
     },
     "4A": {
       "description": "Search client by Surname + Given Name",
@@ -91,23 +100,38 @@
       "category": "Duplicate Client Checks",
       "rule": "field_match",
       "fields": ["dob", "sex"],
+      "field_mapping": {
+        "dob": { "sub_key": "sub_dob", "l400_key": "l400_dob", "is_date": true },
+        "sex": { "sub_key": "sub_sex", "l400_key": "l400_sex", "is_date": false }
+      },
       "pass_condition": "Both DOB and Sex match between L400 and application",
-      "fail_impact": "Refer Ops"
+      "fail_impact": "Refer Ops",
+      "fail_recommended_action": "Flag for human verification — do not auto-correct"
     },
     "5C": {
       "description": "Validate key client fields",
       "category": "Client Information Checks",
       "rule": "field_match",
       "fields": ["sex", "nationality", "nric", "dob", "name"],
+      "field_mapping": {
+        "dob": { "sub_key": "sub_dob", "l400_key": "l400_dob", "is_date": true },
+        "sex": { "sub_key": "sub_sex", "l400_key": "l400_sex", "is_date": false },
+        "nationality": { "sub_key": "sub_nationality", "l400_key": "l400_nationality", "is_date": false },
+        "nric": { "sub_key": "sub_nric", "l400_key": "l400_nric", "is_date": false },
+        "name": { "type": "name_match" }
+      },
       "pass_condition": "All key fields match between L400 and application",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Flag for human verification — do not auto-correct"
     },
     "7B": {
       "description": "Check if all follow-ups are R (Resolved)",
       "category": "Follow-Up Code Checks",
       "rule": "all_followups_resolved",
+      "resolved_status": "R",
       "pass_condition": "All follow-up codes have status R",
-      "fail_impact": "Further Requirements"
+      "fail_impact": "Further Requirements",
+      "fail_recommended_action": "Resolve outstanding follow-ups before locking case"
     },
     "8B": {
       "description": "Check ANB and Total Aggregate SA",
@@ -118,7 +142,8 @@
         { "condition": "anb >= 31 and sa > 5000", "result": "Refer UW", "label": "ANB >= 31 and SA exceeds $5,000" }
       ],
       "pass_condition": "SA within Jet UW STP limits for ANB band",
-      "fail_impact": "Refer UW"
+      "fail_impact": "Refer UW",
+      "missing_recommended_action": "Check L400 Client UW Inquiries screen"
     },
     "8C": {
       "description": "Check UW Sub-std",
@@ -165,7 +190,11 @@
       "category": "Jet Underwriting",
       "rule": "rcs_trigger",
       "trigger_field": "claim_ind",
+      "trigger_value": "y",
       "other_fields": ["uw_sub_std", "decline", "postpone"],
+      "clear_values": ["n", "a", ""],
+      "pass_impact": "RCS Required",
+      "pass_recommended_action": "Perform RCS checks on ICD codes",
       "pass_condition": "Only Claim Ind flagged — RCS check required",
       "fail_impact": "Refer UW"
     }
@@ -174,7 +203,9 @@
   "decision_mapping": {
     "Standard": {
       "condition": "All applicable steps Pass and no outstanding follow-ups",
+      "decision_label": "Approve",
       "workflow_action": "Decision Locked with No Further Requirements",
+      "ops_outcome_detail": "All checks passed. Lock decision with no further requirements.",
       "human_review": false,
       "dotsphere_steps": [
         "Go to Underwriting Decision Update screen on L400",
@@ -186,7 +217,9 @@
     },
     "StandardWithFurtherRequirements": {
       "condition": "Any doc missing OR PF not all R OR unresolved data mismatch",
+      "decision_label": "Block",
       "workflow_action": "Trigger follow-up / pending requirements",
+      "ops_outcome_detail": "Keep case pending; request/resolve outstanding follow-ups before locking decision.",
       "human_review": false,
       "dotsphere_steps": [
         "Go to Proposal Follow-ups screen on L400",
@@ -197,7 +230,9 @@
     },
     "ReferToUW": {
       "condition": "Any UW indicator triggers OR RCS result Refer",
+      "decision_label": "Refer UW",
       "workflow_action": "Underwriting Review",
+      "ops_outcome_detail": "Refer case to underwriter for review.",
       "human_review": true,
       "dotsphere_steps": [
         "Go to DotSphere",
@@ -206,7 +241,9 @@
     },
     "TriggerGNS": {
       "condition": "C09 follow-up code outstanding or compliance hit",
+      "decision_label": "Trigger GNS",
       "workflow_action": "Compliance workflow",
+      "ops_outcome_detail": "Trigger GNS / Compliance workflow for screening.",
       "human_review": true,
       "dotsphere_steps": [
         "Go to DotSphere",
@@ -215,7 +252,9 @@
     },
     "Withdrawal": {
       "condition": "Withdrawal request received",
+      "decision_label": "Withdrawal",
       "workflow_action": "Close case",
+      "ops_outcome_detail": "Close case — withdrawal request received.",
       "human_review": false,
       "dotsphere_steps": [
         "Go to Contract Issue screen on L400",
@@ -226,6 +265,34 @@
         "Select Decision: Withdrawal Request Received"
       ]
     }
+  },
+
+  "decision_logic": {
+    "followup_step_id": "7B",
+    "compliance_trigger_codes": ["C09"],
+    "fail_statuses": ["Fail", "Refer UW", "Refer Ops"],
+    "decision_priority": [
+      {
+        "key": "ReferToUW",
+        "condition": "any_step_has_impact",
+        "impact_value": "Refer UW",
+        "also_check_status": "Refer UW"
+      },
+      {
+        "key": "TriggerGNS",
+        "condition": "compliance_code_outstanding"
+      },
+      {
+        "key": "StandardWithFurtherRequirements",
+        "condition": "any_step_has_impact",
+        "impact_value": "Further Requirements"
+      },
+      {
+        "key": "Standard",
+        "condition": "default"
+      }
+    ],
+    "automation_rule": "all_steps_pass_and_no_failures"
   },
 
   "followup_codes_critical": {
