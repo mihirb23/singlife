@@ -553,8 +553,107 @@ function responseToStructured(content, mode) {
     return jsonBlocks.length === 1 ? jsonBlocks[0] : jsonBlocks;
   }
 
-  // fallback: return as text object
+  // smart fallback: parse markdown sections into structured data
+  return parseMarkdownToStructured(content, mode);
+}
+
+function parseMarkdownToStructured(content, mode) {
+  const result = { mode, exported_at: new Date().toISOString() };
+  const sections = [];
+  const lines = content.split('\n');
+
+  let currentSection = null;
+  let currentBody = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // detect markdown headers (## or ### or **bold header**)
+    const headerMatch = trimmed.match(/^#{1,4}\s+(.+)/) || trimmed.match(/^\*\*(.+?)\*\*\s*$/);
+    if (headerMatch) {
+      if (currentSection) {
+        sections.push({ section: currentSection, content: currentBody.join('\n').trim() });
+      }
+      currentSection = headerMatch[1].replace(/[*#]/g, '').trim();
+      currentBody = [];
+    } else if (trimmed) {
+      currentBody.push(trimmed);
+    }
+  }
+  if (currentSection) {
+    sections.push({ section: currentSection, content: currentBody.join('\n').trim() });
+  }
+
+  // if we found sections, build structured output
+  if (sections.length > 0) {
+    // try to extract key-value pairs from sections
+    for (const sec of sections) {
+      const key = sec.section.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      // check if section body has bullet points or numbered list
+      const bullets = sec.content.split('\n')
+        .filter(l => l.match(/^[-*•]\s|^\d+[.)]\s/))
+        .map(l => l.replace(/^[-*•]\s+|^\d+[.)]\s+/, '').trim());
+      if (bullets.length > 0) {
+        result[key] = bullets.join('; ');
+      } else {
+        result[key] = sec.content;
+      }
+    }
+    return result;
+  }
+
+  // extract markdown tables if present
+  const tableRows = extractMarkdownTable(content);
+  if (tableRows.length > 0) return tableRows;
+
+  // extract bullet/numbered list items as rows
+  const listItems = lines
+    .filter(l => l.trim().match(/^[-*•]\s|^\d+[.)]\s/))
+    .map(l => l.trim().replace(/^[-*•]\s+|^\d+[.)]\s+/, ''));
+  if (listItems.length >= 2) {
+    return listItems.map((item, i) => {
+      // try to split on colon for key-value pairs
+      const colonIdx = item.indexOf(':');
+      if (colonIdx > 0 && colonIdx < 60) {
+        return { field: item.slice(0, colonIdx).trim(), value: item.slice(colonIdx + 1).trim() };
+      }
+      return { item_number: i + 1, content: item };
+    });
+  }
+
+  // last resort: split into paragraphs
+  const paragraphs = content.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+  if (paragraphs.length > 1) {
+    return paragraphs.map((p, i) => ({ section: `Part ${i + 1}`, content: p.replace(/\n/g, ' ') }));
+  }
+
   return { mode, content, exported_at: new Date().toISOString() };
+}
+
+function extractMarkdownTable(text) {
+  const lines = text.split('\n');
+  const tableLines = [];
+  let inTable = false;
+  for (const line of lines) {
+    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      // skip separator rows (|---|---|)
+      if (line.trim().match(/^\|[\s:-]+\|$/)) { inTable = true; continue; }
+      tableLines.push(line.trim());
+      inTable = true;
+    } else if (inTable && line.trim() === '') {
+      break;
+    }
+  }
+  if (tableLines.length < 2) return [];
+
+  const headers = tableLines[0].split('|').filter(Boolean).map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < tableLines.length; i++) {
+    const cells = tableLines[i].split('|').filter(Boolean).map(c => c.trim());
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = cells[idx] || ''; });
+    rows.push(row);
+  }
+  return rows.length > 0 ? rows : [];
 }
 
 function flattenForCsv(data) {
@@ -589,8 +688,22 @@ function flattenForCsv(data) {
     }));
   }
 
+  // if it has email draft content
+  if (data.email || data.email_draft || data.subject) {
+    return Object.entries(flattenObj(data)).map(([key, value]) => ({ field: key, value: String(value) }));
+  }
+
+  // smart key-value: filter out mode/exported_at metadata, make content readable
+  const flat = flattenObj(data);
+  const entries = Object.entries(flat).filter(([k]) => k !== 'exported_at');
+  if (entries.length <= 3 && flat.content && flat.content.length > 200) {
+    // single big content blob — split into meaningful rows
+    const lines = String(flat.content).split(/\n+/).filter(Boolean);
+    return lines.map((line, i) => ({ line_number: i + 1, content: line.trim() }));
+  }
+
   // generic object: one row per key
-  return Object.entries(flattenObj(data)).map(([key, value]) => ({ field: key, value: String(value) }));
+  return entries.map(([key, value]) => ({ field: key, value: String(value) }));
 }
 
 function flattenObj(obj, prefix = '') {
@@ -639,12 +752,24 @@ function exportAsExcel(content, mode) {
     alert('Excel export library not loaded. Try JSON or CSV instead.');
     return;
   }
-  const data = responseToStructured(content, mode);
-  const rows = flattenForCsv(data);
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, mode);
-  XLSX.writeFile(wb, getExportFilename(mode) + '.xlsx');
+  try {
+    const data = responseToStructured(content, mode);
+    const rows = flattenForCsv(data);
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // auto-size columns based on content
+    const colWidths = Object.keys(rows[0] || {}).map(key => {
+      const maxLen = Math.max(key.length, ...rows.map(r => String(r[key] || '').length));
+      return { wch: Math.min(maxLen + 2, 80) };
+    });
+    ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    const sheetName = (mode || 'export').slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, getExportFilename(mode) + '.xlsx');
+  } catch (e) {
+    console.error('Excel export failed:', e);
+    alert('Excel export failed. Try CSV or JSON instead.');
+  }
 }
 
 function downloadBlob(blob, filename) {
