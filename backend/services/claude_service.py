@@ -15,7 +15,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from services.rules_engine import evaluate_case
-from services.rag_service import VectorStore
+from services.rag_service import VectorStore, SUPPORTED_EXTENSIONS, extract_text
 from services.privacy_filter import PrivacyFilter
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=True)
@@ -26,19 +26,25 @@ KB_DIR = Path(__file__).parent.parent.parent / 'knowledge_base'
 LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 
-def load_knowledge_base() -> tuple[str, List[Dict]]:
-    """still loads all txt files for the doc list in the sidebar.
-    the actual retrieval for prompts now goes through RAG"""
+def load_knowledge_base() -> List[Dict]:
+    """Scan knowledge_base/ for all supported file types and return
+    metadata for the sidebar document list."""
     KB_DIR.mkdir(exist_ok=True)
-    files = sorted(KB_DIR.glob('*.txt'))
     doc_info = []
-    for f in files:
+    for f in sorted(KB_DIR.iterdir()):
+        if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            continue
         try:
-            text = f.read_text(encoding='utf-8').strip()
+            ext = f.suffix.lower()
+            if ext in ('.txt', '.json'):
+                chars = len(f.read_text(encoding='utf-8').strip())
+            else:
+                chars = f.stat().st_size
             doc_info.append({
                 'name': f.stem.replace('_', ' ').title(),
                 'filename': f.name,
-                'chars': len(text),
+                'chars': chars,
+                'type': ext.lstrip('.'),
             })
         except Exception as e:
             logger.error(f"Failed to read {f.name}: {e}")
@@ -150,26 +156,67 @@ class InsuranceAssistant:
         self.max_tokens = int(os.getenv('CLAUDE_MAX_TOKENS', '8192'))
         self.documents = load_knowledge_base()
 
-        # init RAG vector store
+        # init RAG vector store — always runs incremental index to pick up
+        # new/changed/deleted files since last startup
         self.vector_store = VectorStore()
-        if self.vector_store.is_available():
-            logger.info("RAG vector store loaded from cache")
-        else:
-            logger.info("Building RAG index from knowledge base...")
-            self.vector_store.index_documents()
+        logger.info("Running incremental KB index...")
+        self.vector_store.index_documents()
 
-        # init claude client
-        if not self.api_key or not self.api_key.startswith('sk-ant-'):
-            logger.warning("ANTHROPIC_API_KEY not found — AI will not be available")
+        # init claude client + validate key with a live API call
+        if not self.api_key:
+            logger.warning("ANTHROPIC_API_KEY not set — AI will not be available")
+            self.client = None
+        elif not self.api_key.startswith('sk-ant-'):
+            logger.warning("ANTHROPIC_API_KEY has wrong format (should start with sk-ant-) — AI will not be available")
             self.client = None
         else:
             try:
                 self.client = Anthropic(api_key=self.api_key)
+                self._validate_api_key()
                 logger.info(f"Hybrid AI Assistant ready | model: {self.model} | "
                             f"docs: {len(self.documents)} | "
                             f"RAG chunks: {self.vector_store.collection.count() if self.vector_store.collection else 0}")
             except Exception as e:
                 logger.error(f"Failed to init Anthropic client: {e}")
+                self.client = None
+
+    def _validate_api_key(self):
+        """Make a lightweight API call to verify the key actually works.
+        Uses models.list (no token cost). Falls back to a 1-token message
+        if the SDK version doesn't support models.list."""
+        try:
+            self.client.models.list(limit=1)
+            logger.info("API key validated successfully")
+            return
+        except AttributeError:
+            pass
+        except Exception as e:
+            error_type = type(e).__name__
+            if 'authentication' in error_type.lower() or 'auth' in str(e).lower():
+                logger.error(f"API key is invalid or expired: {e}")
+                self.client = None
+                return
+            if 'permission' in str(e).lower():
+                logger.warning(f"models.list not permitted, trying fallback: {e}")
+            else:
+                raise
+
+        try:
+            self.client.messages.create(
+                model=self.model,
+                max_tokens=1,
+                messages=[{"role": "user", "content": "ping"}],
+            )
+            logger.info("API key validated successfully (via messages fallback)")
+        except Exception as e:
+            error_str = f"{type(e).__name__}: {e}"
+            if 'authentication' in error_str.lower() or 'invalid' in error_str.lower():
+                logger.error(f"API key is invalid or expired: {error_str}")
+                self.client = None
+            elif 'not_found' in error_str.lower() or 'model' in error_str.lower():
+                logger.warning(f"Model '{self.model}' may not be available, but key is valid: {error_str}")
+            else:
+                logger.error(f"API key validation failed: {error_str}")
                 self.client = None
 
     def reload_knowledge_base(self):
@@ -197,15 +244,15 @@ class InsuranceAssistant:
         return "\n\n".join(context_parts)
 
     def _load_full_kb(self) -> str:
-        """fallback if RAG isn't available — loads everything like before"""
-        files = sorted(KB_DIR.glob('*.txt'))
+        """Fallback if RAG isn't available — extract text from all
+        supported KB files and concatenate."""
         sections = []
-        for f in files:
-            try:
-                text = f.read_text(encoding='utf-8').strip()
+        for f in sorted(KB_DIR.iterdir()):
+            if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                continue
+            text = extract_text(f)
+            if text:
                 sections.append(f"DOCUMENT: {f.name}\n\n{text}")
-            except Exception:
-                pass
         return "\n\n".join(sections)
 
     def evaluate_with_rules_engine(self, case_data) -> dict:
@@ -221,7 +268,28 @@ class InsuranceAssistant:
             logger.error(f"Rules engine error: {e}")
             return None
 
-    def chat_stream(self, messages: list, mode: str = 'chat') -> Iterator[str]:
+    def _build_local_attachments_context(self, local_attachments: List[Dict] | None) -> str:
+        if not local_attachments:
+            return ""
+        sections = []
+        for i, item in enumerate(local_attachments, start=1):
+            filename = item.get('filename', f'attachment_{i}')
+            filetype = item.get('filetype', 'txt')
+            text = item.get('text', '')
+            if text:
+                sections.append(
+                    f"--- Chat Attachment [{i}] ({filename}, type={filetype}) ---\n{text}"
+                )
+        if not sections:
+            return ""
+        return (
+            "## CHAT-LOCAL ATTACHMENTS (conversation-only)\n\n"
+            "Use these attachments as highest-priority context for this chat. "
+            "If chat-local content conflicts with global KB context, prefer chat-local content.\n\n"
+            + "\n\n".join(sections)
+        )
+
+    def chat_stream(self, messages: list, mode: str = 'chat', local_attachments: List[Dict] | None = None) -> Iterator[str]:
         """stream response — uses RAG for context and rules engine for evaluation"""
         if not self.client:
             yield ("**Configuration Error:** `ANTHROPIC_API_KEY` is not set or invalid. "
@@ -238,9 +306,13 @@ class InsuranceAssistant:
 
         # retrieve relevant context via RAG (more chunks for broad Q&A questions)
         rag_context = self._get_rag_context(user_msg, top_k=12)
+        local_context = self._build_local_attachments_context(local_attachments)
 
         # build system prompt with RAG context
-        system_prompt = SYSTEM_PROMPT_BASE + f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
+        system_prompt = SYSTEM_PROMPT_BASE
+        if local_context:
+            system_prompt += f"\n\n{local_context}"
+        system_prompt += f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
 
         try:
             full_response = ''

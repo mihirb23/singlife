@@ -61,6 +61,9 @@ knowledge_base/                                  |
 | Frontend | Vanilla JS, HTML, CSS (dark theme) |
 | Markdown | marked.js |
 | PDF extraction | pypdf |
+| Excel extraction | openpyxl |
+| Vector store | ChromaDB (persistent, incremental indexing) |
+| Embeddings | sentence-transformers (all-MiniLM-L6-v2, local) |
 | Storage | Local filesystem (knowledge_base/ for docs, logs/ for Q&A) |
 | Conversations | Browser localStorage |
 
@@ -74,15 +77,19 @@ singlife/
 │   ├── app.py                      # flask routes (chat, evaluate, upload, logs, etc.)
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── claude_service.py       # claude integration, system prompt, Q&A logging
+│   │   ├── claude_service.py       # claude integration, system prompt, Q&A logging
+│   │   ├── rag_service.py          # vector store, incremental indexing, extractors
+│   │   ├── rules_engine.py         # deterministic SOP rule evaluation
+│   │   └── privacy_filter.py       # PII masking before LLM calls
 │   └── .env                        # your api key goes here (not tracked)
 ├── frontend/
 │   ├── index.html                  # main page with mode toggle
 │   ├── js/app.js                   # UI logic, streaming, conversation management
 │   └── css/styles.css              # dark minimal theme
-├── knowledge_base/
+├── knowledge_base/                 # supports .txt, .pdf, .xlsx, .json
 │   ├── sop_nbig_stp_001.txt        # NBIG pre-issue checks SOP (the main rules)
-│   └── homesecure_income_sg.txt    # sample policy document
+│   └── (any uploaded docs)         # auto-indexed on startup/reload
+├── chroma_db/                      # vector store + index_manifest.json (auto-created, gitignored)
 ├── scripts/
 │   └── add_policy.py               # CLI tool to extract PDF -> knowledge_base/
 ├── logs/                           # Q&A logs (auto-created, gitignored)
@@ -185,7 +192,27 @@ Open http://localhost:5003
    - Automation trigger JSON
 
 ### Upload Documents
-Click **Upload document** in the sidebar to add more SOPs or policy PDFs. The knowledge base reloads automatically.
+Click **Upload document** in the sidebar to add SOPs, policy PDFs, or Excel files (.txt, .pdf, .xlsx). The knowledge base re-indexes automatically.
+
+### Chat-local Attachments
+Use the upload button in the chat input to attach files to the **current conversation only**.
+
+- Chat-local files are extracted and sent as local context with every message in that chat.
+- They are **not** written to `knowledge_base/`.
+- They are **not** embedded into ChromaDB.
+- If chat-local content conflicts with global KB retrieval, chat-local context is prioritized for that conversation.
+
+### Knowledge Base Indexing
+
+The system uses **incremental indexing** backed by a manifest file (`chroma_db/index_manifest.json`):
+
+- On startup and after every upload/delete, the indexer compares KB files against the manifest.
+- **New files** are extracted, chunked, and embedded into ChromaDB.
+- **Changed files** (content hash differs) have their old chunks removed and new ones embedded.
+- **Deleted files** have their chunks removed from the vector store.
+- **Unchanged files** are skipped entirely — no re-embedding work.
+- Supported file types: `.txt`, `.pdf`, `.xlsx`, `.json`.
+- You can also drop files directly into `knowledge_base/` — they'll be picked up on the next startup or reload.
 
 ---
 
