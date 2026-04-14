@@ -477,9 +477,9 @@ def derive_decision(results: list, rules: dict) -> dict:
 
     cfg = decision_map.get(key, {})
 
-    # automation rule from config
-    auto_rule = logic.get("automation_rule", "")
-    can_automate = (key == "Standard" and not failed_steps) if auto_rule == "all_steps_pass_and_no_failures" else False
+    # automation trigger from per-decision mapping in config
+    trigger_map = logic.get("automation_trigger_by_decision", {})
+    can_automate = trigger_map.get(key, "No") == "Yes"
 
     # decision label and ops_outcome from json config
     decision_label = cfg.get("decision_label", key)

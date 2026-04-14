@@ -292,7 +292,15 @@
         "condition": "default"
       }
     ],
-    "automation_rule": "all_steps_pass_and_no_failures"
+    "automation_rule": "all_steps_pass_and_no_failures",
+    "automation_trigger_by_decision": {
+      "_description": "automation_trigger=Yes means Power Automate can handle the next workflow action. It does NOT mean auto-approve.",
+      "Standard": "Yes",
+      "StandardWithFurtherRequirements": "Yes",
+      "Withdrawal": "Yes",
+      "ReferToUW": "No",
+      "TriggerGNS": "No"
+    }
   },
 
   "followup_codes_critical": {
