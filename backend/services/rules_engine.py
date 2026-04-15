@@ -55,18 +55,19 @@ def normalize_case(case: dict) -> dict:
         "client_no": g("clientNo", "CLIENTNO", "client_no"),
         "submission_date": g("submission_date", "submission_datetime", "SUBMISSION_DATIME"),
         "consent_timestamp": g("consent_timestamp", "myinfo_consent_timestamp"),
-        "identity_doc_exists": g("identity_doc_exists", "identity_doc"),
-        "benefit_illustration_exists": g("benefit_illustration_exists", "benefit_illustration"),
-        "application_form_exists": g("application_form_exists", "application_form"),
+        "consent_valid": g("consent_valid", "Consent_Valid"),
+        "identity_doc_exists": g("identity_doc_exists", "identity_doc", "MyInfo_Doc"),
+        "benefit_illustration_exists": g("benefit_illustration_exists", "benefit_illustration", "BI_Doc"),
+        "application_form_exists": g("application_form_exists", "application_form", "AppForm_Doc"),
         "sub_nric": g("nric", "sub_identity_id", "SUB_SECUITYNO"),
-        "sub_surname": g("surname", "SUB_SURNAME"),
-        "sub_given_name": g("givenName", "given_name", "SUB_GIVNAME"),
+        "sub_surname": g("surname", "sub_surname", "SUB_SURNAME"),
+        "sub_given_name": g("givenName", "given_name", "sub_given_name", "SUB_GIVNAME"),
         "sub_sex": g("sex", "sub_sex", "SUB_CLTSEX"),
         "sub_dob": g("dob", "sub_dob", "SUB_CLTDOB"),
         "sub_nationality": g("nationality", "sub_nationality", "SUB_NATLTY"),
         "l400_nric": g("l400_nric", "curr_identity_id", "CURR_SECUITYNO"),
-        "l400_surname": g("l400_surname", "CURR_SURNAME"),
-        "l400_given_name": g("l400_givenName", "l400_given_name", "CURR_GIVNAME"),
+        "l400_surname": g("l400_surname", "curr_surname", "CURR_SURNAME"),
+        "l400_given_name": g("l400_givenName", "l400_given_name", "curr_given_name", "CURR_GIVNAME"),
         "l400_name": g("l400_name"),
         "l400_sex": g("l400_sex", "curr_sex", "CURR_CLTSEX"),
         "l400_dob": g("l400_dob", "curr_dob", "CURR_CLTDOB"),
@@ -135,10 +136,21 @@ def execute_consent_timestamp(c: dict, step_cfg: dict) -> StepResult:
     desc = step_cfg["description"]
     max_days = step_cfg.get("max_age_days", 365)
 
+    # check consent_valid flag first (Y/N from test data — per May: use consent_valid column)
+    consent_valid = norm_str(c.get("consent_valid"))
+    if consent_valid in ("y", "yes", "true", "1"):
+        return StepResult(step_id, desc, "Pass",
+                          "MyInfo consent valid (consent_valid = Y)")
+    if consent_valid in ("n", "no", "false", "0"):
+        return StepResult(step_id, desc, "Fail",
+                          "MyInfo consent invalid or expired (consent_valid = N)",
+                          decision_impact=step_cfg["fail_impact"],
+                          recommended_action=step_cfg.get("fail_recommended_action"))
+
     consent_ts = c.get("consent_timestamp")
     submission_date = c.get("submission_date")
 
-    # if consent timestamp not in case data, flag it (don't assume)
+    # if neither consent_valid nor timestamp in case data
     if not consent_ts:
         return StepResult(step_id, desc, "Pass",
                           "MyInfo consent timestamp not in case data — assumed valid for prototype",
@@ -337,16 +349,23 @@ def execute_threshold_check(c: dict, step_cfg: dict) -> StepResult:
     anb = int(anb)
     sa = float(sa)
 
-    # evaluate each threshold from the json config
+    # evaluate each threshold from the json config (order matters — first match wins)
     for threshold in step_cfg.get("thresholds", []):
         condition = threshold["condition"]
         if eval_condition(condition, anb, sa):
-            return StepResult(step_id, desc, threshold["result"],
-                              f"{threshold['label']} (ANB={anb}, SA=${sa:,.0f})",
-                              decision_impact=step_cfg["fail_impact"])
+            result_status = threshold["result"]
+            if result_status in ("Continue", "Pass"):
+                return StepResult(step_id, desc, "Pass",
+                                  f"{threshold['label']} (ANB={anb}, SA=${sa:,.0f})")
+            else:
+                return StepResult(step_id, desc, result_status,
+                                  f"{threshold['label']} (ANB={anb}, SA=${sa:,.0f})",
+                                  decision_impact=step_cfg["fail_impact"])
 
-    return StepResult(step_id, desc, "Pass",
-                      f"ANB {anb}, SA ${sa:,.0f} — within limits")
+    # no threshold matched — default to Refer UW (conservative)
+    return StepResult(step_id, desc, "Refer UW",
+                      f"ANB {anb}, SA ${sa:,.0f} — no matching threshold rule",
+                      decision_impact=step_cfg["fail_impact"])
 
 
 def eval_condition(condition: str, anb: int, sa: float) -> bool:
@@ -462,7 +481,9 @@ def derive_decision(results: list, rules: dict) -> dict:
         if condition == "any_step_has_impact":
             impact_val = rule.get("impact_value", "")
             also_status = rule.get("also_check_status", "")
-            if any(r.decision_impact == impact_val or r.status == also_status for r in results):
+            extra_impacts = rule.get("additional_impacts", [])
+            if any(r.decision_impact == impact_val or r.status == also_status or
+                   r.decision_impact in extra_impacts for r in results):
                 key = rule["key"]
                 break
 

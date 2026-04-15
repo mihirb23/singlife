@@ -1,7 +1,7 @@
 ================================================================================
 SINGLIFE AI OPS — ISSUES & KNOWLEDGE GAPS LOG
 ================================================================================
-Last updated: 2026-04-09
+Last updated: 2026-04-15
 Maintained by: NTU Team (Mihir)
 Purpose: Track all issues, knowledge gaps, and open questions for SME clarification.
          Items marked [ASK MAY/SHARON] need input from Singlife team.
@@ -12,134 +12,7 @@ Purpose: Track all issues, knowledge gaps, and open questions for SME clarificat
 
 --- OPEN ISSUES (Need action) ---
 
-KG-001 | RCS ICD Pass/Fail Mapping Not Officially Confirmed [ASK MAY/SHARON]
-  Date: 2026-03-31
-  SOP Step: 8H
-  Issue: Current mapping says ALL ICD codes = Refer to UW (no pass codes).
-         This is derived from observed data, not official UW team confirmation.
-  Risk: If a new unknown ICD code appears, AI defaults to Refer (conservative)
-        which may cause unnecessary UW referrals.
-  Action: Request UW team to validate the pass/refer mapping and provide the
-          official RCS ICD code list used in production.
-
-KG-002 | Follow-Up Code Definitions Incomplete [ASK MAY/SHARON]
-  Date: 2026-03-31
-  SOP Step: 7B
-  Issue: Only ~15 of 93 observed follow-up codes have confirmed definitions.
-         CSL and C09 are confirmed but most B-series, S-series, Q-series codes
-         have inferred descriptions only.
-  Risk: AI can detect outstanding codes but can't explain WHY they were raised
-        or what specific action resolves them.
-  Action: Request top 20 follow-up code mapping with: business description,
-          trigger condition, resolution action, responsible team.
-
-KG-003 | MyInfo Consent Timestamp Not in UAT Data [ASK MAY/SHARON]
-  Date: 2026-03-31
-  SOP Step: 2A
-  Issue: UAT data extraction doesn't include MyInfo consent timestamp.
-         Step 2A needs this for EzSub/Hardcopy validation.
-  Risk: Can't test Step 2A with real data for EzSub channel.
-  Action: Provide mock consent timestamps in test data, or confirm this step
-          should be simulated with synthetic values.
-
-KG-005 | NRIC Search 0 or >1 Results — Resolution Path Unclear [ASK MAY/SHARON]
-  Date: 2026-03-31
-  SOP Step: 3A
-  Issue: SOP says 0 or >1 results = Exception → Refer Ops. But doesn't document
-         HOW ops resolves: merge/void for >1? New client creation for 0?
-  Risk: AI flags correctly but can't guide ops on resolution steps.
-  Action: Document ops resolution workflow for >1 matches and 0 matches.
-
-KG-007 | ANB/SA Threshold — Gap For ANB>=31 & SA<=5000 [ASK MAY/SHARON]
-  Date: 2026-03-31 (updated 2026-04-09)
-  SOP Step: 8B
-  Issue: Original question about inclusive/exclusive is now RESOLVED — SOP is
-         explicit: <=$6000 (inclusive), >$6000 (exclusive), >$5000 (exclusive).
-         SA=$6000 & ANB=31 → Refer UW (matches >$5000 & ANB>=31 rule).
-         HOWEVER, a real gap exists: ANB>=31 AND SA<=5000 matches NO rule.
-         Rule 1 (<=$6000 & ANB 18-30) fails because ANB outside 18-30.
-         Rule 2 (>$6000) fails because SA<=5000.
-         Rule 3 (>$5000 & ANB>=31) fails because SA<=5000 is NOT >5000.
-  Risk: Cases with ANB>=31 and SA<=5000 have no matching threshold rule.
-  Action: Ask May/Sharon — what is the decision for ANB>=31 and SA<=5000?
-          Is it Continue (default safe) or should Rule 1 cover all ANB ranges?
-
-KG-008 | QnB Channel — What Happens When 8G Passes But 8H Is Skipped? [ASK MAY/SHARON]
-  Date: 2026-04-08 (found during Chat testing)
-  SOP Step: 8G → 8H
-  Issue: For QnB, Step 8H (RCS checks) is skipped (channel gating = N).
-         But if a QnB case has only Claim Ind = Y and all others = N,
-         Step 8G passes and should proceed to 8H — which is skipped.
-         The fallback decision for this scenario is not documented.
-  Risk: QnB cases with Claim Ind = Y may get stuck without a clear decision path.
-  Action: Ask Sharon/May — should QnB cases with Claim Ind = Y and no other
-          indicators be auto-referred to UW, or is there a different path?
-
-KG-009 | RCS Returns Empty (No ICD Codes) — Decision Not Specified [ASK MAY/SHARON]
-  Date: 2026-04-08 (found during Chat testing)
-  SOP Step: 8H
-  Issue: If Claim Ind = Y and RCS is triggered but returns NO ICD codes
-         (empty result), the SOP doesn't specify the decision.
-         All docs say "ICD found = Refer" but don't cover "no ICD found".
-  Risk: Undefined behavior for edge case. AI currently flags for human review.
-  Action: Ask Sharon/May — if RCS returns no ICD codes, is the decision
-          Standard (proceed) or still Refer to UW?
-
-KG-011 | Test Cases TC-02, TC-03, TC-04 Use QnB But Test EzSub-Only Steps [ASK MAY/SHARON]
-  Date: 2026-04-09 (found during test case execution)
-  SOP Step: 1A, 2A, 3A
-  Issue: TC-02 tests missing MyInfo (Step 1A), TC-03 tests invalid consent
-         (Step 2A), TC-04 tests multiple NRIC results (Step 3A). All three
-         test cases specify channel=QnB, but Steps 1A, 2A, 3A are gated N
-         for QnB per the Processing Steps matrix. These steps only run on
-         EzSub/Hardcopy. Our engine correctly skips them and returns Approve.
-  Risk: Test cases cannot be validated as-is. Either the channel should be
-        EzSub, or the test cases are conceptual and not meant for engine execution.
-  Action: Ask May/Sharon — should TC-02, TC-03, TC-04 use channel=EzSub
-          instead of QnB? Or should QnB channel gating be updated to include
-          these steps?
-
-KG-012 | TC-05 Duplicate Client Cannot Be Simulated With Matching Data [ASK MAY/SHARON]
-  Date: 2026-04-09 (updated 2026-04-09)
-  SOP Step: 4A, 4C
-  Issue: TC-05 tests duplicate client detection requiring human patching (4C).
-         However, Step 4C is gated N for all channels (human-only step), and
-         the test data has all fields matching so no duplicate is detected.
-  Update: PolicyList UAT data DOES contain real duplicate examples:
-         - Client 55143982: DUPLICATE_BYNAME_COUNT=2 (list: 55143982,55151728)
-         - Client 55142164: DUPLICATE_BYNAME_COUNT=5
-         - Client 55104129: DUPLICATE_BYNAME_COUNT=3
-         These could be used to construct TC-05 test data.
-  Risk: Duplicate detection path untested with current test case contract numbers.
-  Action: Ask Sharon — can we use one of these real duplicate client records
-          (e.g. 55143982) to build TC-05, or provide a test-case-specific duplicate?
-
-KG-013 | TC-06 Name Mismatch — Step 5A vs 5C Conflict [ASK MAY/SHARON]
-  Date: 2026-04-09 (found during test case execution)
-  SOP Step: 5A, 5C
-  Issue: TC-06 expects "Refer Ops" for name sequence mismatch (Step 5A).
-         But Step 5A is NO for ALL channels. Our engine catches the name
-         mismatch via Step 5C (key field validation) which gives decision
-         impact "Further Requirements" → decision label "Block", not "Refer Ops".
-  Question: Is the expected decision "Refer Ops" or "Block/Further Requirements"
-            when a name mismatch is found?
-  Action: Ask Sharon — when name doesn't match between submission and L400,
-          should the decision be Refer Ops (manual name investigation) or
-          Block/Further Requirements (request correction)?
-
-KG-014 | TC-07 Birthday Crossover and TC-08 Invalid ERI — Steps NA For All Channels [ASK MAY/SHARON]
-  Date: 2026-04-09 (found during test case execution)
-  SOP Step: 6E, 6F
-  Issue: TC-07 tests birthday crossover (Step 6E) and TC-08 tests invalid
-         ERI (Step 6F). Both steps are NA for ALL channels — contract info
-         checks are system-handled. Our engine has no executor for these steps
-         and correctly skips them.
-  Risk: These scenarios cannot be tested without adding contract info step
-        executors. TC-08 expects "Block" but engine returns "Approve" since
-        Step 6F is not evaluated.
-  Action: Ask May — are Steps 6E/6F planned for a future phase? Should we
-          add executors for contract info checks, or are these covered by
-          the existing system (L400) and out of AI scope?
+(none — all items resolved or deferred)
 
 
 --- DEFERRED ITEMS (Out of current scope) ---
@@ -147,8 +20,7 @@ KG-014 | TC-07 Birthday Crossover and TC-08 Invalid ERI — Steps NA For All Cha
 KG-004 | Premium Rate Tables Not Available [DEFERRED]
   Date: 2026-03-31
   SOP Step: 6A-6I
-  Issue: Steps 6A-6I are NA for all channels currently. If premium validation
-         is added to scope, need the CareShield premium rate tables.
+  Issue: Steps 6A-6I are NA for all channels currently.
   Action: Request if scope expands to include premium checks.
 
 KG-006 | No Hardcopy Channel Test Data [DEFERRED]
@@ -156,44 +28,61 @@ KG-006 | No Hardcopy Channel Test Data [DEFERRED]
   Issue: UAT data only covers QnB and EzSub. Hardcopy channel untested.
   Action: Provide Hardcopy test cases if brought into scope.
 
+KG-014 | TC-07/TC-08 Steps 6E/6F Temporarily N [DEFERRED]
+  Date: 2026-04-09 (answered 2026-04-15)
+  Answer from May: Temporarily set to N for testing purpose.
+  Status: Deferred — will be enabled in a future phase.
 
---- NEW ISSUES (Found 2026-04-09 from UAT data analysis) ---
 
-KG-015 | UAT Data Missing All UW Indicator Values [FIX]
-  Date: 2026-04-09
-  SOP Step: 8B-8H
-  Issue: PolicyList UAT data has ALL UW indicator columns completely empty:
-         UW-SUBSTD, DECLINE, POSTPONE, CLAIMIND, SA-Limit, JET, DECISION.
-         This means TC-10 (UW Claim Indicator / RCS) cannot be tested with
-         real UAT data — only synthetic/mock data.
-  Risk: UW referral paths (Steps 8C-8H) are untestable without synthetic data.
-  Action: Either request UAT data with populated UW fields, or confirm that
-          synthetic values should be injected for testing.
+--- RESOLVED ITEMS ---
 
-KG-016 | Test Client G0406789 SA=8000 Triggers Refer UW Per Step 8B [FIX]
-  Date: 2026-04-09
-  SOP Step: 8B
-  Issue: L400 screenshot for test client 55167349 (contract G0406789) shows
-         Long Term Care Total Aggregate SA = 8,000. Per Step 8B rule,
-         SA > $6000 → Refer to UW. This means even the "test" client would
-         NOT get Standard decision — it would be referred to UW.
-  Question: Does the SA threshold apply to LTC (Long Term Care) products
-            the same way as other products? Or are CareShield SA thresholds
-            different from life/CI thresholds?
-  Action: Check if SA thresholds in Step 8B apply to CareShield/LTC plans,
-          or if there are product-specific threshold rules.
+KG-001 | RCS ICD Pass/Fail Mapping — RESOLVED
+  Resolved: 2026-04-15. ICD codes shared in Sprint 5 folder. All codes = Refer UW confirmed.
 
-KG-017 | No Name Mismatch Data in Entire UAT Dataset [FIX]
-  Date: 2026-04-09
-  SOP Step: 5A, 5C
-  Issue: PolicyList data shows FLAG_MAX_SURNAME=N and FLAG_MAX_GIVNAME=N
-         for ALL records across the entire UAT dataset. No real name
-         mismatches exist in the test data.
-  Risk: TC-06 (Name Mismatch) cannot be tested with real data. Need
-        synthetic data with deliberately mismatched names.
-  Action: Create synthetic test record with name mismatch for TC-06, or
-          ask Sharon to provide a case where name differs between submission
-          and L400.
+KG-002 | Follow-Up Code Definitions — RESOLVED
+  Resolved: 2026-04-15. Full L400 follow-up code list ingested. Official definitions
+  added to ref_followup_codes_official.txt. CSL/AT3 definitions corrected.
+
+KG-003 | MyInfo Consent Timestamp — RESOLVED
+  Resolved: 2026-04-15. Use consent_valid column (Y/N). Rules engine updated.
+
+KG-005 | NRIC Search Resolution Workflow — RESOLVED
+  Resolved: 2026-04-15. May confirmed: >1 = merge, 0 = create new client ID.
+  Added ref_nric_search_resolution.txt to knowledge base.
+
+KG-007 | ANB/SA Threshold Rules — RESOLVED
+  Resolved: 2026-04-15. Corrected 8B thresholds in sop_rules.json. 11 edge cases pass.
+
+KG-008 | QnB Claim Ind=Y + 8H Skipped — RESOLVED
+  Resolved: 2026-04-15. Refer to UW. RCS Required added to decision priority.
+
+KG-009 | RCS Empty Result — RESOLVED
+  Resolved: 2026-04-15. Refer to UW (UW must evaluate even without ICD codes).
+
+KG-010 | Automation Trigger Meaning — RESOLVED
+  Resolved: 2026-04-09. Moved to sop_rules.json automation_trigger_by_decision.
+
+KG-011 | TC-02/03/04 Channel — RESOLVED
+  Resolved: 2026-04-15. Confirmed EzSub. Test data updated.
+
+KG-012 | TC-05 Duplicate Client Data — RESOLVED
+  Resolved: 2026-04-15. Can use existing UAT duplicates.
+
+KG-015 | UAT Data Missing UW Indicators — RESOLVED
+  Resolved: 2026-04-15. Engine handles UW indicators correctly with synthetic data.
+  UAT data simply has empty values. Not a code issue.
+
+KG-016 | Test Client SA=8000 — RESOLVED
+  Resolved: 2026-04-15. SA=8000 > $6000 → Refer UW is CORRECT per May's rules.
+
+KG-013 | TC-06 Name Mismatch — RESOLVED
+  Resolved: 2026-04-15. Split name check from 5C into new step 5C_name with
+  fail_impact "Refer Ops". Name mismatch now correctly triggers ReferToUW.
+  Zero code changes — JSON config only.
+
+KG-017 | Name Mismatch Test Data — RESOLVED
+  Resolved: 2026-04-15. Added lowercase surname/given_name field mappings to normalizer.
+  Name mismatches now detected via 5C_name → Refer Ops → ReferToUW.
 
 
 ================================================================================

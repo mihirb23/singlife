@@ -125,10 +125,11 @@ Format your response as:
 - Use ONLY the exact definitions from the context provided. If a definition is not in the context, say "definition not in retrieved context" rather than guessing.
 
 ## Confirmed Follow-Up Code Definitions (ALWAYS use these — do NOT invent alternatives)
-- CSL = CareShield specific clarification required (CareShield category)
-- C09 = Compliance / GNS re-screening required (Compliance category) — drives GNS/Compliance decision path
-- F45 = Premium mismatch detected (Premium category)
-- AT3 = Additional requirement pending (Admin category)
+- CSL = Basic CSL Plan Status check (EYA/EYB category)
+- C09 = Compliance GNS Rescreening (Compliance category) — drives GNS/Compliance decision path
+- F45 = PF-Premium differ from PI / premium mismatch (Premium category)
+- AT3 = DVM Agent Tier T3 (DVM category)
+- GNS = Global Naming Screening (Compliance category)
 
 ## Confirmed Step Descriptions (ALWAYS use these — do NOT invent alternatives)
 - 1A: Open Identity Document on FileNet

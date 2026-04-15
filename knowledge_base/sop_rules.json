@@ -9,7 +9,7 @@
       "2A": "N",
       "3A": "N",
       "4A": "Y", "4B": "Y", "4C": "N",
-      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "5A": "N", "5B": "N", "5C": "Y", "5C_name": "Y", "5D": "N",
       "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
       "7A": "Y", "7B": "Y", "7C": "N",
       "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
@@ -20,7 +20,7 @@
       "2A": "Y",
       "3A": "Y",
       "4A": "Y", "4B": "Y", "4C": "Y",
-      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "5A": "N", "5B": "N", "5C": "Y", "5C_name": "Y", "5D": "N",
       "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
       "7A": "Y", "7B": "Y", "7C": "N",
       "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
@@ -31,7 +31,7 @@
       "2A": "Y",
       "3A": "Y",
       "4A": "Y", "4B": "Y", "4C": "Y",
-      "5A": "N", "5B": "N", "5C": "Y", "5D": "N",
+      "5A": "N", "5B": "N", "5C": "Y", "5C_name": "Y", "5D": "N",
       "6A": "NA", "6E": "NA", "6F": "NA", "6G": "NA", "6H": "NA", "6I": "NA",
       "7A": "Y", "7B": "Y", "7C": "N",
       "8A": "Y", "8B": "Y", "8C": "Y", "8D": "Y", "8E": "Y", "8F": "Y", "8G": "Y", "8H": "N",
@@ -109,20 +109,31 @@
       "fail_recommended_action": "Flag for human verification — do not auto-correct"
     },
     "5C": {
-      "description": "Validate key client fields",
+      "description": "Validate key client fields (Sex, Nationality, NRIC, DOB)",
       "category": "Client Information Checks",
       "rule": "field_match",
-      "fields": ["sex", "nationality", "nric", "dob", "name"],
+      "fields": ["sex", "nationality", "nric", "dob"],
       "field_mapping": {
         "dob": { "sub_key": "sub_dob", "l400_key": "l400_dob", "is_date": true },
         "sex": { "sub_key": "sub_sex", "l400_key": "l400_sex", "is_date": false },
         "nationality": { "sub_key": "sub_nationality", "l400_key": "l400_nationality", "is_date": false },
-        "nric": { "sub_key": "sub_nric", "l400_key": "l400_nric", "is_date": false },
-        "name": { "type": "name_match" }
+        "nric": { "sub_key": "sub_nric", "l400_key": "l400_nric", "is_date": false }
       },
       "pass_condition": "All key fields match between L400 and application",
       "fail_impact": "Further Requirements",
       "fail_recommended_action": "Flag for human verification — do not auto-correct"
+    },
+    "5C_name": {
+      "description": "Check client name sequence (Surname, Given Name)",
+      "category": "Client Information Checks",
+      "rule": "field_match",
+      "fields": ["name"],
+      "field_mapping": {
+        "name": { "type": "name_match" }
+      },
+      "pass_condition": "Name sequence matches between submission and L400",
+      "fail_impact": "Refer Ops",
+      "fail_recommended_action": "Ops to check name sequence based on race — Chinese: surname+given, non-Chinese: given+surname. Adjust in L400 to match NRIC."
     },
     "7B": {
       "description": "Check if all follow-ups are R (Resolved)",
@@ -138,8 +149,10 @@
       "category": "Jet Underwriting",
       "rule": "threshold_check",
       "thresholds": [
-        { "condition": "sa > 6000", "result": "Refer UW", "label": "SA exceeds $6,000" },
-        { "condition": "anb >= 31 and sa > 5000", "result": "Refer UW", "label": "ANB >= 31 and SA exceeds $5,000" }
+        { "condition": "sa > 6000", "result": "Refer UW", "label": "SA exceeds $6,000 — Refer regardless of ANB" },
+        { "condition": "sa <= 6000 and anb >= 18 and anb <= 30", "result": "Continue", "label": "SA <= $6,000 and ANB 18-30 — Continue" },
+        { "condition": "sa <= 5000 and anb >= 31", "result": "Continue", "label": "SA <= $5,000 and ANB >= 31 — Continue" },
+        { "condition": "sa <= 6000 and (anb < 18 or anb > 30)", "result": "Refer UW", "label": "SA <= $6,000 but ANB outside 18-30 — Refer" }
       ],
       "pass_condition": "SA within Jet UW STP limits for ANB band",
       "fail_impact": "Refer UW",
@@ -276,7 +289,8 @@
         "key": "ReferToUW",
         "condition": "any_step_has_impact",
         "impact_value": "Refer UW",
-        "also_check_status": "Refer UW"
+        "also_check_status": "Refer UW",
+        "additional_impacts": ["RCS Required", "Refer Ops"]
       },
       {
         "key": "TriggerGNS",
@@ -304,9 +318,10 @@
   },
 
   "followup_codes_critical": {
-    "CSL": { "category": "CareShield Life", "meaning": "CareShield specific clarification required" },
-    "F45": { "category": "Premium", "meaning": "Premium mismatch detected" },
-    "C09": { "category": "Compliance", "meaning": "GNS re-screening required" },
-    "AT3": { "category": "Admin", "meaning": "Additional requirement pending" }
+    "CSL": { "category": "EYA/EYB", "meaning": "Basic CSL Plan Status check" },
+    "F45": { "category": "Premium", "meaning": "PF-Premium differ from PI (premium mismatch)" },
+    "C09": { "category": "Compliance", "meaning": "Compliance GNS Rescreening" },
+    "AT3": { "category": "DVM", "meaning": "DVM Agent Tier T3" },
+    "GNS": { "category": "Compliance", "meaning": "Global Naming Screening" }
   }
 }

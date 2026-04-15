@@ -1,0 +1,142 @@
+REFERENCE: FOLLOW-UP (FUP) CODE DICTIONARY — OFFICIAL L400 DEFINITIONS
+Source: Follow Up Codes extraction from L400 (provided by May Yang, Sprint 5)
+Date: 2026-04-15
+
+This document contains the OFFICIAL follow-up code definitions from L400.
+These supersede any previously inferred definitions from data patterns.
+
+====================================================================
+KEY CODES USED IN QnB/EzSub PROCESSING (SOP Steps 7A-7C)
+====================================================================
+
+CSL  = Basic CSL Plan Status (EYA/EYB) — CareShield Life plan status check
+C09  = Compliance GNS Rescreening — triggers GNS/Compliance decision path
+F45  = PF-Premium differ from PI — premium mismatch between proposal and system
+AT3  = DVM Agent Tier T3 — agent tier classification
+GNS  = Global Naming Screening — compliance screening check
+
+====================================================================
+APPLICATION FORM FOLLOW-UPS (B-series)
+====================================================================
+
+B1   = ACR-ROP not answered
+B4   = PF-High Risk Occupation Question
+B5   = PF-Owner/LA not signed/dated
+B6   = PF-Owner cannot be witness
+B7   = PF-Investment choice differ from PI
+B8   = PF-Plan/Rider differ from PI
+B9   = PF-Payment mode not ticked
+B10  = PF-Client Particulars
+B11  = PF-Tax Residency Declaration
+B12  = PF-Beneficial Owner/PEP
+B13  = PF-Plan Details
+B14  = PF-Cash Benefit/Coupons Payout
+B15  = PF-Authorisation by CPF Holder
+B16  = PF-Premium Payment Details
+B17  = PF-Source of Wealth/Fund
+B18  = PF-Replacement of Policy
+B19  = PF-Previous/Concurrent Policy
+B20  = PF-Travel/Lifestyle Questions
+B21  = PF-General Questions
+B22  = PF-Signature
+B23  = PF-Wrong Application Form
+B24  = PF-Incomplete Application Form
+B25  = PF-Missing Info in App Form
+B26  = NFTF Supplementary Form
+B27  = PF-Others 2
+B28  = PI-Signature
+B32  = PI-Others 2
+B33  = PI-introduction pages missing
+B39  = FFF-Owner/LA not signed/dated
+B40  = FFF-Adviser not signed/dated
+B41  = FFF-Amendments
+B42  = FFF-Signature
+B43  = FFF-Incomplete
+B44  = FFF-Others 1
+B45  = Name/NRIC details of BO
+B46  = Reason for different mail address
+B47  = Relationship between Assured & BO
+B49  = Document signed date > 3 months
+B51  = Thumbprints not allowed
+B52  = To submit staff discount form
+B53  = Copy of Staff pass
+B54  = Copy of Identity
+B55  = Copy of IC/Passport of Payor
+B57  = PO Box/VBox not allowed
+B58  = Alteration/Additional Info
+B60  = Premium Payment Details
+B61  = Copy of valid pass
+B63  = GIRO Application
+B64  = Incomplete NOB Form
+B65  = Proof of Residential Address
+B66  = Source of Wealth Form
+B67  = US National Declaration
+B70  = Pending FA/Client instruction
+B71  = Pending BA's reply
+B72  = Pending Management's Decision
+B75  = Pending L&C reply
+B76  = GIRO - not processed
+B78  = ROP - Question answered Yes
+B79  = Application Form - ElderShield
+B81  = Official Assignee Consent (Bankruptcy)
+B90  = Alteration/Additional Info
+B91  = Cover Page - Missing/Incomplete
+
+====================================================================
+COMPLIANCE CODES (C-series)
+====================================================================
+
+C01  = U.S. Person Declaration Form
+C02  = W-8 BEN Form
+C03  = W-8 BEN-E Form
+C04  = W-9 Form
+C05  = DPI Fact Sheet
+C07  = Compliance Premium Limit
+C08  = Compliance 3rd party payor
+C09  = Compliance GNS Rescreening
+
+====================================================================
+STP (STRAIGHT-THROUGH PROCESSING) CODES (T-series)
+====================================================================
+
+T01  = STP Owner is not personal
+T02  = STP 3rd party Medisave payment
+T03  = STP Abroad Residential Country
+T04  = STP FileNet validation error
+T05  = STP Email or mobile is agent's
+T06  = STP ID Verification Failed
+T07  = STP Non MyInfo
+T09  = STP Not Overwrite Correspondence Address
+T10  = IDP-ID details not match
+T11  = IDP-FNA details not match
+T12  = IDP-NFTF details not match
+T13  = NFTF Offshore
+
+====================================================================
+UNDERWRITING FOLLOW-UPS
+====================================================================
+
+UWO  = Underwriting Others 1
+UW2-UW9 = Underwriting Others 2-9
+LIA  = Existing Substandard Record
+CON  = Concurrent Application
+X39  = UW Sub-std/Decline/Postpone Flag = Y
+
+====================================================================
+MEDICAL EXAMINATION CODES
+====================================================================
+
+MED  = Medical Examination
+MEN  = Routine Medical Examination
+MAR  = Medical Attendant's Report
+ECG  = Electrocardiogram
+CXR  = Chest X-rays
+SCG  = Stress ECG
+FBS  = Fasting Blood Sugar
+HBA  = Glycosylated Haemoglobin (HbA1c)
+P1-P13 = Blood Test Panels (various)
+
+====================================================================
+TOTAL CODES IN L400: ~400+ unique follow-up codes
+For the complete list, refer to the Follow Up Codes extraction CSV.
+====================================================================
