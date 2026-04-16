@@ -1,0 +1,26 @@
+REFERENCE: NRIC SEARCH RESOLUTION WORKFLOW (Step 3A)
+Source: May Yang (confirmed 2026-04-15)
+
+====================================================================
+STEP 3A — NRIC SEARCH ON L400
+====================================================================
+
+Normal Case: Exactly 1 result found
+- Proceed with the matched client record.
+
+Exception: 0 results found (no record)
+- Ops investigates: checks NRIC on application form and any existing
+  policies that may be tagged to different records.
+- Outcome: Create a new client ID if no existing record can be matched.
+
+Exception: >1 results found (multiple records)
+- There should NOT be multiple client records with the same NRIC.
+- Ops investigates: checks NRIC, application form, and existing policies
+  tagged to different records to determine the correct client.
+- Outcome: Merge duplicate records if confirmed to be the same person.
+
+Decision Impact: Refer Ops (both 0 and >1 cases require human investigation)
+
+Note: The AI should flag the exception and recommend Ops investigation.
+The AI must NOT merge records or create client IDs — these are human-only
+actions performed in L400.

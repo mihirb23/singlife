@@ -26,6 +26,29 @@ KB_DIR = Path(__file__).parent.parent.parent / 'knowledge_base'
 LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 
+MAX_CONVERSATION_MESSAGES = 20  # keep last N messages to avoid blowing context window
+MAX_MESSAGE_CHARS = 4000  # truncate individual messages longer than this
+
+
+def _trim_messages(messages: list) -> list:
+    """Keep conversation within context limits.
+    Preserves the first message and last N messages."""
+    if len(messages) <= MAX_CONVERSATION_MESSAGES:
+        trimmed = messages
+    else:
+        trimmed = [messages[0]] + messages[-(MAX_CONVERSATION_MESSAGES - 1):]
+
+    # truncate overly long individual messages
+    result = []
+    for m in trimmed:
+        content = m.get('content', '')
+        if len(content) > MAX_MESSAGE_CHARS and m.get('role') != 'user':
+            result.append({**m, 'content': content[:MAX_MESSAGE_CHARS] + '\n\n[...truncated for context limit]'})
+        else:
+            result.append(m)
+    return result
+
+
 def load_knowledge_base() -> List[Dict]:
     """Scan knowledge_base/ for all supported file types and return
     metadata for the sidebar document list."""
@@ -71,7 +94,7 @@ Format your response as:
 **1. SOP Rule Evaluation** — explain each step with tables
 **2. Overall Decision** — one of: Standard | Standard with Further Requirements | Refer to UW | Trigger GNS | Withdrawal
 **3. Ops Outcome** — what the processor should do next
-**4. Automation Trigger** — Yes or No
+**4. Automation Trigger** — Yes or No (use the automation_trigger_by_decision mapping from sop_rules.json in the knowledge base)
 **5. Notes** — skipped steps, knowledge gaps, assumptions
 
 ## For General Q&A (no rules engine)
@@ -90,10 +113,11 @@ Format your response as:
 - Use ONLY the exact definitions from the context provided. If a definition is not in the context, say "definition not in retrieved context" rather than guessing.
 
 ## Confirmed Follow-Up Code Definitions (ALWAYS use these — do NOT invent alternatives)
-- CSL = Customer clarification required (Customer category)
-- C09 = Compliance / GNS re-screening required (Compliance category) — drives GNS/Compliance decision path
-- F45 = Premium mismatch detected (Premium category)
-- AT3 = Additional requirement pending (Admin category)
+- CSL = Basic CSL Plan Status check (EYA/EYB category)
+- C09 = Compliance GNS Rescreening (Compliance category) — drives GNS/Compliance decision path
+- F45 = PF-Premium differ from PI / premium mismatch (Premium category)
+- AT3 = DVM Agent Tier T3 (DVM category)
+- GNS = Global Naming Screening (Compliance category)
 
 ## Confirmed Step Descriptions (ALWAYS use these — do NOT invent alternatives)
 - 1A: Open Identity Document on FileNet
@@ -118,7 +142,7 @@ Format your response as:
 - 8D: Check Decline indicator
 - 8E: Check Postpone indicator
 - 8F: Check Claim Ind indicator
-- 8G: Check if only Claim Ind = Y (RCS trigger)
+- 8G: Check if only Claim Ind = Y (all others N) — RCS trigger
 - 8H: RCS checks (ICD codes) — decision step
 - 9A: Take decision and lock case
 
@@ -314,13 +338,16 @@ class InsuranceAssistant:
             system_prompt += f"\n\n{local_context}"
         system_prompt += f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
 
+        # trim conversation to avoid context overflow
+        trimmed = _trim_messages(messages)
+
         try:
             full_response = ''
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=system_prompt,
-                messages=messages,
+                messages=trimmed,
             ) as stream:
                 for text in stream.text_stream:
                     full_response += text
@@ -351,8 +378,9 @@ class InsuranceAssistant:
             if mask_log:
                 logger.info(f"Privacy filter masked {len(mask_log)} PII items before LLM call")
 
-            # step 3: get relevant SOP context via RAG
-            query = f"SOP evaluation {rules_result.get('channel', '')} {rules_result.get('cnt_type', '')} case checks"
+            # step 3: get relevant SOP context via RAG — include failing steps for better retrieval
+            failed_steps = ' '.join(s.get('step_id', '') for s in rules_result.get('steps', []) if s.get('status') == 'Fail')
+            query = f"SOP evaluation {rules_result.get('channel', '')} {rules_result.get('cnt_type', '')} {failed_steps} case checks"
             rag_context = self._get_rag_context(query)
 
             # step 4: build prompt with SANITIZED rules engine output + RAG context
@@ -371,14 +399,14 @@ class InsuranceAssistant:
                 "Also include the structured JSON output at the end.\n\n"
                 "IMPORTANT RULES FOR THIS RESPONSE:\n"
                 "- Use the step descriptions EXACTLY as provided in the rules engine output and system prompt\n"
-                "- For follow-up codes, use ONLY the definitions from the system prompt (CSL = Customer clarification required, etc.)\n"
+                "- For follow-up codes, use ONLY the definitions from the system prompt (for example: CSL = Basic CSL Plan Status check)\n"
                 "- Do NOT expand abbreviations or invent alternative names for codes or steps\n"
                 "- For skipped steps, use the descriptions from the system prompt and note whether they are skipped due to channel gating OR because they are NO for ALL channels\n"
                 "- Step 5D is 'Update incorrect fields on L400' (NOT occupation/income check)\n"
             )
 
-            # append the eval prompt to messages
-            eval_messages = list(messages) + [{'role': 'user', 'content': eval_prompt}]
+            # append the eval prompt to messages (trimmed)
+            eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
         else:
             # rules engine couldn't parse it — fall back to full LLM evaluation
             rag_context = self._get_rag_context(str(case_data))
@@ -390,7 +418,7 @@ class InsuranceAssistant:
                 f"**Case Data:**\n```\n{json.dumps(case_data, indent=2) if isinstance(case_data, dict) else str(case_data)}\n```\n\n"
                 "Provide the full 5-part evaluation format."
             )
-            eval_messages = list(messages) + [{'role': 'user', 'content': eval_prompt}]
+            eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
 
         try:
             full_response = ''
@@ -454,17 +482,27 @@ class InsuranceAssistant:
             f"## RELEVANT CONTEXT\n\n{rag_context}"
         )
 
+        # privacy filter — sanitize email data before LLM
+        pf = PrivacyFilter()
+        sanitized_email = pf.sanitize_for_llm(email_data)
+        mask_log = pf.get_mask_log()
+        if mask_log:
+            logger.info(f"Privacy filter masked {len(mask_log)} PII items in email draft")
+
+        safe_customer = sanitized_email.get('customer_name', customer_name)
+        safe_extra = {k: v for k, v in sanitized_email.items() if k not in ('decision_type', 'customer_name', 'outcome_summary', 'tone_required')}
+
         user_prompt = (
             f"Generate a customer email for this underwriting decision:\n\n"
             f"**Decision Type:** {decision_type}\n"
-            f"**Customer Name:** {customer_name}\n"
+            f"**Customer Name:** {safe_customer}\n"
             f"**Outcome Summary:** {outcome_summary}\n"
             f"**Tone:** {tone}\n"
-            f"**Additional Context:** {json.dumps({k: v for k, v in email_data.items() if k not in ('decision_type', 'customer_name', 'outcome_summary', 'tone_required')}, indent=2)}\n\n"
+            f"**Additional Context:** {json.dumps(safe_extra, indent=2)}\n\n"
             "Follow the email communication rules exactly. Produce the Analysis section first, then the full Customer Email Draft."
         )
 
-        eval_messages = list(messages) + [{'role': 'user', 'content': user_prompt}]
+        eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': user_prompt}]
 
         try:
             full_response = ''
@@ -615,14 +653,21 @@ class InsuranceAssistant:
             f"## RELEVANT CONTEXT\n\n{rag_context}"
         )
 
+        # privacy filter — sanitize QA data before LLM
+        pf = PrivacyFilter()
+        sanitized_qa = pf.sanitize_for_llm(qa_data)
+        mask_log = pf.get_mask_log()
+        if mask_log:
+            logger.info(f"Privacy filter masked {len(mask_log)} PII items in QA review")
+
         user_prompt = (
             f"Review this underwriting case for QA:\n\n"
-            f"**Case Data:**\n```json\n{json.dumps(qa_data, indent=2)}\n```\n\n"
+            f"**Case Data:**\n```json\n{json.dumps(sanitized_qa, indent=2)}\n```\n\n"
             f"**Pre-calculated QA Score:**\n```json\n{json.dumps(qa_score, indent=2)}\n```\n\n"
             "Explain the QA scoring, highlight risk drivers, and provide a structured review."
         )
 
-        eval_messages = list(messages) + [{'role': 'user', 'content': user_prompt}]
+        eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': user_prompt}]
 
         try:
             full_response = ''
