@@ -6,7 +6,9 @@
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -354,10 +356,17 @@ class VectorStore:
                 n_results=fetch_k,
             )
             chunks = []
+            metadata_rows = results.get("metadatas") or []
+            metadata_row = metadata_rows[0] if metadata_rows else []
+            if metadata_row is None:
+                metadata_row = []
             for i, doc in enumerate(results["documents"][0]):
+                metadata = metadata_row[i] if i < len(metadata_row) and metadata_row[i] else {}
                 chunks.append({
                     "text": doc,
-                    "source": results["metadatas"][0][i]["source"],
+                    "source": metadata.get("source"),
+                    "chunk_index": metadata.get("chunk_index"),
+                    "total_chunks": metadata.get("total_chunks"),
                     "score": results["distances"][0][i] if results["distances"] else None,
                 })
             if priority_sources:
@@ -373,6 +382,246 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Vector store query failed: {e}")
             return []
+
+    def resolve_source_by_name(self, query: str, confidence_min: float = 0.72, tie_margin: float = 0.03) -> dict:
+        """Resolve a KB source from user query with deterministic ranking."""
+        candidates = list(scan_kb_files().keys())
+        if not candidates:
+            return {
+                "matched": False,
+                "source": None,
+                "candidates": [],
+                "confidence": 0.0,
+                "reason": "no_sources_available",
+                "ambiguous": False,
+            }
+
+        query_lower = query.lower().strip()
+        query_norm = self._normalize_token(query)
+
+        scored = []
+        for source in candidates:
+            source_lower = source.lower()
+            stem_lower = Path(source).stem.lower()
+            source_norm = self._normalize_token(source_lower)
+            stem_norm = self._normalize_token(stem_lower)
+
+            score = 0.0
+            reason = "fuzzy"
+            if source_lower in query_lower:
+                score = 1.0
+                reason = "exact_filename"
+            elif stem_lower and stem_lower in query_lower:
+                score = 0.96
+                reason = "exact_stem"
+            elif source_norm and source_norm in query_norm:
+                score = 0.93
+                reason = "normalized_exact"
+            elif stem_norm and stem_norm in query_norm:
+                score = 0.90
+                reason = "normalized_stem"
+            else:
+                score = max(
+                    SequenceMatcher(None, query_norm, source_norm).ratio(),
+                    SequenceMatcher(None, query_norm, stem_norm).ratio(),
+                )
+
+            scored.append({
+                "source": source,
+                "score": float(score),
+                "reason": reason,
+            })
+
+        scored.sort(key=lambda item: item["score"], reverse=True)
+        top = scored[0]
+        runner_up = scored[1] if len(scored) > 1 else None
+
+        if top["score"] < confidence_min:
+            return {
+                "matched": False,
+                "source": None,
+                "candidates": [s["source"] for s in scored[:3]],
+                "confidence": top["score"],
+                "reason": "below_confidence_threshold",
+                "ambiguous": False,
+            }
+
+        if runner_up and runner_up["score"] >= confidence_min and abs(top["score"] - runner_up["score"]) <= tie_margin:
+            return {
+                "matched": False,
+                "source": None,
+                "candidates": [top["source"], runner_up["source"]],
+                "confidence": top["score"],
+                "reason": "ambiguous_match",
+                "ambiguous": True,
+            }
+
+        return {
+            "matched": True,
+            "source": top["source"],
+            "candidates": [s["source"] for s in scored[:3]],
+            "confidence": top["score"],
+            "reason": top["reason"],
+            "ambiguous": False,
+        }
+
+    def get_full_source_text(self, source: str) -> dict:
+        """Load extracted full text for a single source file."""
+        path = KB_DIR / source
+        if not path.exists() or not path.is_file():
+            return {
+                "source": source,
+                "text": "",
+                "char_count": 0,
+                "ordered": True,
+                "extractor_type": None,
+                "error": "source_not_found",
+            }
+
+        text = extract_text(path)
+        if not text:
+            return {
+                "source": source,
+                "text": "",
+                "char_count": 0,
+                "ordered": True,
+                "extractor_type": path.suffix.lower().lstrip("."),
+                "error": "extraction_failed_or_empty",
+            }
+
+        return {
+            "source": source,
+            "text": text,
+            "char_count": len(text),
+            "ordered": True,
+            "extractor_type": path.suffix.lower().lstrip("."),
+            "error": None,
+        }
+
+    def get_chunks_for_source(self, source: str) -> List[dict]:
+        """Return all chunks for a source in original chunk order."""
+        if not self.collection:
+            return []
+        try:
+            result = self.collection.get(
+                where={"source": source},
+                include=["documents", "metadatas"],
+            )
+            documents = result.get("documents", []) or []
+            metadatas = result.get("metadatas", []) or []
+            items = []
+            for i, text in enumerate(documents):
+                md = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
+                items.append({
+                    "text": text,
+                    "source": source,
+                    "chunk_index": int(md.get("chunk_index", i)),
+                    "total_chunks": int(md.get("total_chunks", len(documents))),
+                })
+            items.sort(key=lambda item: item["chunk_index"])
+            return items
+        except Exception as e:
+            logger.error(f"Failed to load chunks for source {source}: {e}")
+            return []
+
+    def get_expanded_context(
+        self,
+        question: str,
+        top_k: int = 8,
+        priority_sources: Optional[List[str]] = None,
+        neighbor_window: int = 1,
+    ) -> dict:
+        """Retrieve semantic hits and expand with neighboring chunks by source."""
+        matched = self.query(question, top_k=top_k, priority_sources=priority_sources)
+        if not matched:
+            return {
+                "chunks": [],
+                "grouped_by_source": {},
+                "coverage": {},
+                "quality": {
+                    "result_count": 0,
+                    "best_score": None,
+                    "unique_sources": 0,
+                    "sufficient": False,
+                    "reason": "no_chunks",
+                },
+            }
+
+        grouped_hits: Dict[str, List[dict]] = {}
+        for hit in matched:
+            source = hit.get("source")
+            if not source:
+                continue
+            grouped_hits.setdefault(source, []).append(hit)
+
+        expanded_map: Dict[tuple, dict] = {}
+        coverage = {}
+        for source, hits in grouped_hits.items():
+            source_chunks = self.get_chunks_for_source(source)
+            if not source_chunks:
+                continue
+            chunk_by_idx = {c["chunk_index"]: c for c in source_chunks}
+            matched_indices = sorted({
+                int(h["chunk_index"]) for h in hits if h.get("chunk_index") is not None
+            })
+            selected_indices = set()
+            for idx in matched_indices:
+                for i in range(max(0, idx - neighbor_window), idx + neighbor_window + 1):
+                    if i in chunk_by_idx:
+                        selected_indices.add(i)
+
+            for idx in sorted(selected_indices):
+                item = dict(chunk_by_idx[idx])
+                if idx in matched_indices:
+                    hit = next((h for h in hits if h.get("chunk_index") == idx), None)
+                    item["score"] = hit.get("score") if hit else None
+                    item["is_match"] = True
+                else:
+                    item["score"] = None
+                    item["is_match"] = False
+                expanded_map[(source, idx)] = item
+
+            total_chunks = source_chunks[0]["total_chunks"] if source_chunks else len(selected_indices)
+            coverage[source] = {
+                "matched_chunks": len(matched_indices),
+                "expanded_chunks": len(selected_indices),
+                "total_chunks": total_chunks,
+            }
+
+        expanded_chunks = list(expanded_map.values())
+        expanded_chunks.sort(key=lambda c: (str(c.get("source", "")), int(c.get("chunk_index", 0))))
+
+        scores = [c["score"] for c in matched if c.get("score") is not None]
+        best_score = min(scores) if scores else None
+        result_count = len(matched)
+        unique_sources = len({c.get("source") for c in matched if c.get("source")})
+        sufficient = result_count >= max(2, min(top_k, 4))
+        reason = "ok"
+        if best_score is not None and best_score > 1.15:
+            sufficient = False
+            reason = "weak_similarity_scores"
+        elif unique_sources > max(3, top_k // 2):
+            sufficient = False
+            reason = "over_fragmented_sources"
+        elif not sufficient:
+            reason = "too_few_matches"
+
+        grouped_by_source = {}
+        for chunk in expanded_chunks:
+            grouped_by_source.setdefault(chunk["source"], []).append(chunk)
+
+        return {
+            "chunks": expanded_chunks,
+            "grouped_by_source": grouped_by_source,
+            "coverage": coverage,
+            "quality": {
+                "result_count": result_count,
+                "best_score": best_score,
+                "unique_sources": unique_sources,
+                "sufficient": sufficient,
+                "reason": reason,
+            },
+        }
 
     def is_available(self) -> bool:
         return self.collection is not None and self.collection.count() > 0
@@ -413,3 +662,7 @@ class VectorStore:
                 ids=ids[i:i + batch],
                 metadatas=metadatas[i:i + batch],
             )
+
+    @staticmethod
+    def _normalize_token(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (value or "").lower())

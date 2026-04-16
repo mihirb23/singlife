@@ -214,6 +214,15 @@ The system uses **incremental indexing** backed by a manifest file (`chroma_db/i
 - Supported file types: `.txt`, `.pdf`, `.xlsx`, `.json`.
 - You can also drop files directly into `knowledge_base/` — they'll be picked up on the next startup or reload.
 
+### Retrieval Behavior
+
+The assistant uses a source-aware retrieval strategy:
+
+- Standard questions use semantic retrieval plus neighboring chunk expansion for better continuity.
+- If you explicitly ask for a KB file by name (e.g. `ref_myinfo_consent_rules.txt`), the system tries to load that file in full, in original extractor order.
+- If retrieval coverage is weak/fragmented, the system falls back to loading the top-matched full source file.
+- If a file is too large for prompt budget, content is included in-order up to the limit with an explicit truncation notice.
+
 ---
 
 ## Configuration

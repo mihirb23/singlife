@@ -7,8 +7,9 @@
 import os
 import json
 import logging
+import re
 from pathlib import Path
-from typing import Iterator, List, Dict
+from typing import Iterator, List, Dict, Optional
 from datetime import datetime
 
 from anthropic import Anthropic
@@ -28,6 +29,12 @@ LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 MAX_CONVERSATION_MESSAGES = 20  # keep last N messages to avoid blowing context window
 MAX_MESSAGE_CHARS = 4000  # truncate individual messages longer than this
+MAX_FULL_SOURCE_CHARS = 100000
+MAX_CONTEXT_CHARS = 140000
+MAX_SOURCES_PER_RESPONSE = 3
+FILE_MATCH_CONFIDENCE_MIN = 0.72
+FILE_MATCH_TIE_MARGIN = 0.03
+EXPANDED_NEIGHBOR_WINDOW = 1
 
 
 def _trim_messages(messages: list) -> list:
@@ -102,6 +109,7 @@ Format your response as:
 - Cite specific SOP steps, sections, or documents
 - If the answer isn't in the context, say so and flag as knowledge gap
 - If the question is ambiguous, ask clarifying questions
+- Use the **Retrieval Context Header** to determine whether the provided content scope is full or partial
 
 ## Critical Rules — ANTI-HALLUCINATION
 - NEVER guess or use external knowledge
@@ -111,6 +119,7 @@ Format your response as:
 - If a rule/threshold is missing — flag as Knowledge Gap, do NOT guess
 - NEVER expand abbreviations or invent definitions for follow-up codes or step descriptions
 - Use ONLY the exact definitions from the context provided. If a definition is not in the context, say "definition not in retrieved context" rather than guessing.
+- If `content_scope` is `full`, do NOT claim you lack access to the full file
 
 ## Confirmed Follow-Up Code Definitions (ALWAYS use these — do NOT invent alternatives)
 - CSL = Basic CSL Plan Status check (EYA/EYB category)
@@ -153,7 +162,7 @@ Format your response as:
 """
 
 
-def log_qa(question: str, response: str, mode: str = 'chat'):
+def log_qa(question: str, response: str, mode: str = 'chat', retrieval_meta: Optional[Dict] = None):
     """save each Q&A pair for the learning loop"""
     LOG_DIR.mkdir(exist_ok=True)
     log_file = LOG_DIR / 'qa_log.jsonl'
@@ -164,6 +173,8 @@ def log_qa(question: str, response: str, mode: str = 'chat'):
         'response_preview': response[:300],
         'response_length': len(response),
     }
+    if retrieval_meta:
+        entry['retrieval'] = retrieval_meta
     try:
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry) + '\n')
@@ -252,20 +263,296 @@ class InsuranceAssistant:
     def is_available(self) -> bool:
         return self.client is not None
 
-    def _get_rag_context(self, query: str, top_k: int = 8) -> str:
-        """retrieve relevant chunks from the vector store for this query"""
-        chunks = self.vector_store.query(query, top_k=top_k)
-        if not chunks:
-            # fallback — load all txt files directly (like the old approach)
-            return self._load_full_kb()
+    def _detect_explicit_filename_intent(self, query: str) -> bool:
+        """Detect explicit user requests to read a specific file/document."""
+        q = (query or "").strip().lower()
+        if not q:
+            return False
+        if re.search(r"`[^`]+\.(txt|pdf|xlsx|json)`", q):
+            return True
+        if re.search(r"\b[\w\-]+\.(txt|pdf|xlsx|json)\b", q):
+            return True
+        intent_words = (
+            "read file",
+            "open file",
+            "full file",
+            "entire file",
+            "entire document",
+            "full document",
+            "summarise",
+            "summarize",
+        )
+        return any(word in q for word in intent_words) and ("file" in q or "document" in q)
 
-        context_parts = []
-        for i, chunk in enumerate(chunks):
-            context_parts.append(
-                f"--- Retrieved Context [{i+1}] (source: {chunk['source']}) ---\n"
-                f"{chunk['text']}"
+    def _classify_query_type(self, query: str) -> str:
+        q = (query or "").lower()
+        if self._detect_explicit_filename_intent(q):
+            return "explicit_file"
+        broad_words = ("all", "entire", "full", "complete", "summarise", "summarize", "overview")
+        if any(w in q for w in broad_words):
+            return "broad"
+        return "narrow"
+
+    def _dynamic_top_k(self, query: str, base_top_k: int) -> int:
+        q = (query or "").lower()
+        if any(word in q for word in ("full", "entire", "all", "overview", "summarise", "summarize")):
+            return max(base_top_k, 14)
+        return base_top_k
+
+    def _truncate_context_text(self, text: str, max_chars: int, label: str) -> tuple[str, Optional[str]]:
+        if len(text) <= max_chars:
+            return text, None
+        truncated = text[:max_chars].rstrip()
+        reason = f"trimmed_{label}_to_{max_chars}_chars"
+        truncated += (
+            f"\n\n[Context truncated: {label} exceeded budget. "
+            "Ask 'continue' to review remaining sections.]"
+        )
+        return truncated, reason
+
+    def _build_context_header(
+        self,
+        retrieval_mode: str,
+        sources: List[str],
+        content_scope: str,
+        truncation: Optional[str],
+        coverage_hint: str,
+    ) -> str:
+        return (
+            "## RETRIEVAL CONTEXT HEADER\n"
+            f"- retrieval_mode: {retrieval_mode}\n"
+            f"- sources: {', '.join(sources) if sources else 'none'}\n"
+            f"- coverage_hint: {coverage_hint}\n"
+            f"- content_scope: {content_scope}\n"
+            f"- truncation: {truncation or 'none'}"
+        )
+
+    def _build_clarification_message(self, candidates: List[str]) -> str:
+        options = "\n".join([f"- `{name}`" for name in candidates[:5]])
+        return (
+            "I found multiple matching files and need you to pick one before I continue:\n\n"
+            f"{options}\n\n"
+            "Reply with the exact filename you want."
+        )
+
+    def _format_expanded_context(self, expanded_payload: dict) -> str:
+        chunks = expanded_payload.get("chunks", [])
+        if not chunks:
+            return ""
+
+        sources_seen = []
+        lines = []
+        for chunk in chunks:
+            source = chunk.get("source", "unknown")
+            if source not in sources_seen:
+                sources_seen.append(source)
+            if len(sources_seen) > MAX_SOURCES_PER_RESPONSE and source not in sources_seen[:MAX_SOURCES_PER_RESPONSE]:
+                continue
+            idx = chunk.get("chunk_index")
+            marker = "matched" if chunk.get("is_match") else "neighbor"
+            lines.append(
+                f"--- Retrieved Context (source: {source}, chunk: {idx}, role: {marker}) ---\n"
+                f"{chunk.get('text', '')}"
             )
-        return "\n\n".join(context_parts)
+        return "\n\n".join(lines)
+
+    def _assess_context_quality(self, payload: dict) -> dict:
+        quality = payload.get("quality", {}) if payload else {}
+        if not quality:
+            return {"sufficient": False, "reason": "missing_quality", "score": 0.0}
+        result_count = int(quality.get("result_count", 0))
+        best_score = quality.get("best_score")
+        unique_sources = int(quality.get("unique_sources", 0))
+        sufficient = bool(quality.get("sufficient", False))
+        reason = quality.get("reason", "unknown")
+        score = float(result_count)
+        if best_score is not None:
+            score += max(0.0, 2.0 - float(best_score))
+        score -= max(0, unique_sources - 3) * 0.2
+        return {
+            "sufficient": sufficient,
+            "reason": reason,
+            "score": round(score, 3),
+        }
+
+    def _build_full_source_payload(self, source: str, retrieval_mode: str, fallback_reason: Optional[str] = None) -> dict:
+        source_payload = self.vector_store.get_full_source_text(source)
+        source_text = source_payload.get("text", "")
+        if not source_text:
+            return {
+                "retrieval_mode": retrieval_mode,
+                "query_type": "narrow",
+                "sources": [source],
+                "content_scope": "partial",
+                "truncation": "source_extraction_failed",
+                "coverage_hint": "full_source_unavailable",
+                "context_text": "",
+                "quality": {"sufficient": False, "reason": "source_extraction_failed", "score": 0.0},
+                "fallback_reason": fallback_reason,
+            }
+
+        truncated_text, truncation = self._truncate_context_text(source_text, MAX_FULL_SOURCE_CHARS, "full_source")
+        scope = "partial" if truncation else "full"
+        coverage_hint = f"full_source ({len(truncated_text):,} chars loaded)"
+        header = self._build_context_header(
+            retrieval_mode=retrieval_mode,
+            sources=[source],
+            content_scope=scope,
+            truncation=truncation,
+            coverage_hint=coverage_hint,
+        )
+        return {
+            "retrieval_mode": retrieval_mode,
+            "query_type": "explicit_file" if retrieval_mode == "full_named_file" else "narrow",
+            "sources": [source],
+            "content_scope": scope,
+            "truncation": truncation,
+            "coverage_hint": coverage_hint,
+            "context_text": f"{header}\n\n## SOURCE CONTENT ({source})\n\n{truncated_text}",
+            "quality": {"sufficient": True, "reason": "full_source_loaded", "score": 1.0},
+            "fallback_reason": fallback_reason,
+        }
+
+    def _prepare_retrieval_context(self, query: str, top_k: int = 8, prefer_full_named_file: bool = False) -> dict:
+        query = (query or "").strip()
+        query_type = self._classify_query_type(query)
+        explicit_intent = self._detect_explicit_filename_intent(query)
+
+        # Named-file mode
+        if explicit_intent and prefer_full_named_file:
+            name_match = self.vector_store.resolve_source_by_name(
+                query,
+                confidence_min=FILE_MATCH_CONFIDENCE_MIN,
+                tie_margin=FILE_MATCH_TIE_MARGIN,
+            )
+            if name_match.get("ambiguous"):
+                candidates = name_match.get("candidates", [])
+                return {
+                    "retrieval_mode": "clarification",
+                    "query_type": query_type,
+                    "sources": candidates,
+                    "content_scope": "partial",
+                    "truncation": None,
+                    "coverage_hint": "ambiguous_filename_match",
+                    "context_text": "",
+                    "quality": {"sufficient": False, "reason": "ambiguous_filename_match", "score": 0.0},
+                    "clarification_message": self._build_clarification_message(candidates),
+                    "match_confidence": name_match.get("confidence"),
+                }
+            if name_match.get("matched"):
+                full_payload = self._build_full_source_payload(
+                    source=name_match["source"],
+                    retrieval_mode="full_named_file",
+                )
+                full_payload["query_type"] = query_type
+                full_payload["match_confidence"] = name_match.get("confidence")
+                return full_payload
+
+        # Semantic retrieval with optional priority source
+        priority_sources = None
+        name_match = self.vector_store.resolve_source_by_name(
+            query,
+            confidence_min=max(FILE_MATCH_CONFIDENCE_MIN, 0.80),
+            tie_margin=FILE_MATCH_TIE_MARGIN,
+        )
+        if name_match.get("matched"):
+            priority_sources = [name_match["source"]]
+
+        tuned_top_k = self._dynamic_top_k(query, top_k)
+        expanded_payload = self.vector_store.get_expanded_context(
+            question=query,
+            top_k=tuned_top_k,
+            priority_sources=priority_sources,
+            neighbor_window=EXPANDED_NEIGHBOR_WINDOW,
+        )
+        quality = self._assess_context_quality(expanded_payload)
+        sources = list((expanded_payload.get("grouped_by_source") or {}).keys())
+        coverage = expanded_payload.get("coverage", {})
+        coverage_hint = ", ".join(
+            [
+                f"{src}:{meta.get('expanded_chunks', 0)}/{meta.get('total_chunks', 0)}"
+                for src, meta in list(coverage.items())[:MAX_SOURCES_PER_RESPONSE]
+            ]
+        ) or "no_source_coverage"
+        raw_context = self._format_expanded_context(expanded_payload)
+
+        if raw_context:
+            raw_context, context_truncation = self._truncate_context_text(raw_context, MAX_CONTEXT_CHARS, "retrieval_context")
+        else:
+            context_truncation = None
+
+        if raw_context and quality.get("sufficient"):
+            mode = "expanded" if any(c.get("is_match") is False for c in expanded_payload.get("chunks", [])) else "semantic"
+            header = self._build_context_header(
+                retrieval_mode=mode,
+                sources=sources[:MAX_SOURCES_PER_RESPONSE],
+                content_scope="partial" if context_truncation else "full",
+                truncation=context_truncation,
+                coverage_hint=coverage_hint,
+            )
+            return {
+                "retrieval_mode": mode,
+                "query_type": query_type,
+                "sources": sources[:MAX_SOURCES_PER_RESPONSE],
+                "content_scope": "partial" if context_truncation else "full",
+                "truncation": context_truncation,
+                "coverage_hint": coverage_hint,
+                "context_text": f"{header}\n\n## RETRIEVED EXCERPTS\n\n{raw_context}",
+                "quality": quality,
+                "match_confidence": name_match.get("confidence"),
+            }
+
+        # Insufficient coverage fallback — load full top source if available
+        fallback_source = sources[0] if sources else (priority_sources[0] if priority_sources else None)
+        if fallback_source:
+            fallback_payload = self._build_full_source_payload(
+                source=fallback_source,
+                retrieval_mode="full_fallback",
+                fallback_reason=quality.get("reason"),
+            )
+            fallback_payload["query_type"] = query_type
+            fallback_payload["match_confidence"] = name_match.get("confidence")
+            fallback_payload["quality"] = quality
+            return fallback_payload
+
+        # Last resort fallback to full KB
+        full_kb = self._load_full_kb()
+        full_kb, kb_truncation = self._truncate_context_text(full_kb, MAX_CONTEXT_CHARS, "full_kb")
+        header = self._build_context_header(
+            retrieval_mode="full_kb_fallback",
+            sources=[],
+            content_scope="partial" if kb_truncation else "full",
+            truncation=kb_truncation,
+            coverage_hint="full_kb_concat_fallback",
+        )
+        return {
+            "retrieval_mode": "full_kb_fallback",
+            "query_type": query_type,
+            "sources": [],
+            "content_scope": "partial" if kb_truncation else "full",
+            "truncation": kb_truncation,
+            "coverage_hint": "full_kb_concat_fallback",
+            "context_text": f"{header}\n\n{full_kb}",
+            "quality": quality,
+            "match_confidence": name_match.get("confidence"),
+        }
+
+    def _log_retrieval_telemetry(self, query: str, payload: dict):
+        logger.info(
+            "retrieval | query_type=%s | mode=%s | sources=%s | scope=%s | truncation=%s | quality=%s | score=%s",
+            payload.get("query_type"),
+            payload.get("retrieval_mode"),
+            ",".join(payload.get("sources", [])) if payload.get("sources") else "none",
+            payload.get("content_scope"),
+            payload.get("truncation") or "none",
+            payload.get("quality", {}).get("reason"),
+            payload.get("quality", {}).get("score"),
+        )
+
+    def _get_rag_context(self, query: str, top_k: int = 8) -> str:
+        """Compatibility wrapper around structured retrieval context."""
+        payload = self._prepare_retrieval_context(query, top_k=top_k, prefer_full_named_file=False)
+        return payload.get("context_text", "")
 
     def _load_full_kb(self) -> str:
         """Fallback if RAG isn't available — extract text from all
@@ -328,8 +615,20 @@ class InsuranceAssistant:
                 user_msg = m.get('content', '')
                 break
 
-        # retrieve relevant context via RAG (more chunks for broad Q&A questions)
-        rag_context = self._get_rag_context(user_msg, top_k=12)
+        # retrieve context via intent-aware strategy (named-file/full/expanded/fallback)
+        retrieval_payload = self._prepare_retrieval_context(
+            user_msg,
+            top_k=12,
+            prefer_full_named_file=True,
+        )
+        self._log_retrieval_telemetry(user_msg, retrieval_payload)
+        if retrieval_payload.get("retrieval_mode") == "clarification":
+            clarification = retrieval_payload.get("clarification_message", "Please clarify which file you want.")
+            yield clarification
+            log_qa(user_msg, clarification, mode, retrieval_meta=retrieval_payload)
+            return
+
+        rag_context = retrieval_payload.get("context_text", "")
         local_context = self._build_local_attachments_context(local_attachments)
 
         # build system prompt with RAG context
@@ -353,7 +652,7 @@ class InsuranceAssistant:
                     full_response += text
                     yield text
 
-            log_qa(user_msg, full_response, mode)
+            log_qa(user_msg, full_response, mode, retrieval_meta=retrieval_payload)
 
         except Exception as e:
             logger.error(f"Claude API error: {e}")
@@ -381,7 +680,9 @@ class InsuranceAssistant:
             # step 3: get relevant SOP context via RAG — include failing steps for better retrieval
             failed_steps = ' '.join(s.get('step_id', '') for s in rules_result.get('steps', []) if s.get('status') == 'Fail')
             query = f"SOP evaluation {rules_result.get('channel', '')} {rules_result.get('cnt_type', '')} {failed_steps} case checks"
-            rag_context = self._get_rag_context(query)
+            retrieval_payload = self._prepare_retrieval_context(query, top_k=10, prefer_full_named_file=False)
+            self._log_retrieval_telemetry(query, retrieval_payload)
+            rag_context = retrieval_payload.get("context_text", "")
 
             # step 4: build prompt with SANITIZED rules engine output + RAG context
             system_prompt = SYSTEM_PROMPT_BASE + f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
@@ -409,7 +710,10 @@ class InsuranceAssistant:
             eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
         else:
             # rules engine couldn't parse it — fall back to full LLM evaluation
-            rag_context = self._get_rag_context(str(case_data))
+            fallback_query = str(case_data)
+            retrieval_payload = self._prepare_retrieval_context(fallback_query, top_k=10, prefer_full_named_file=False)
+            self._log_retrieval_telemetry(fallback_query, retrieval_payload)
+            rag_context = retrieval_payload.get("context_text", "")
             system_prompt = SYSTEM_PROMPT_BASE + f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
 
             eval_prompt = (
@@ -433,7 +737,7 @@ class InsuranceAssistant:
                     yield text
 
             user_msg = str(case_data)[:500] if isinstance(case_data, dict) else str(case_data)[:500]
-            log_qa(user_msg, full_response, 'evaluate')
+            log_qa(user_msg, full_response, 'evaluate', retrieval_meta=retrieval_payload)
 
         except Exception as e:
             logger.error(f"Claude API error: {e}")
@@ -451,8 +755,10 @@ class InsuranceAssistant:
         outcome_summary = email_data.get('outcome_summary', 'Unable to offer coverage at this time')
         tone = email_data.get('tone_required', 'Empathetic')
 
-        rag_context = self._get_rag_context(
-            f"email communication rules {decision_type} customer empathetic compliant", top_k=10)
+        email_query = f"email communication rules {decision_type} customer empathetic compliant"
+        retrieval_payload = self._prepare_retrieval_context(email_query, top_k=10, prefer_full_named_file=False)
+        self._log_retrieval_telemetry(email_query, retrieval_payload)
+        rag_context = retrieval_payload.get("context_text", "")
 
         email_system = (
             "You are the **Singlife AI Customer Communication Assistant**.\n\n"
@@ -515,7 +821,7 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
-            log_qa(f"email_draft:{decision_type}", full_response, 'email')
+            log_qa(f"email_draft:{decision_type}", full_response, 'email', retrieval_meta=retrieval_payload)
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error:** {str(e)}"
@@ -631,8 +937,10 @@ class InsuranceAssistant:
         # calculate score deterministically
         qa_score = self._calculate_qa_score(qa_data)
 
-        rag_context = self._get_rag_context(
-            "QA underwriting review scoring rules complexity indicators", top_k=10)
+        qa_query = "QA underwriting review scoring rules complexity indicators"
+        retrieval_payload = self._prepare_retrieval_context(qa_query, top_k=10, prefer_full_named_file=False)
+        self._log_retrieval_telemetry(qa_query, retrieval_payload)
+        rag_context = retrieval_payload.get("context_text", "")
 
         qa_system = (
             "You are the **Singlife AI QA Review Assistant**.\n\n"
@@ -680,7 +988,12 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
-            log_qa(f"qa_review:{qa_data.get('case_id', 'unknown')}", full_response, 'qa_review')
+            log_qa(
+                f"qa_review:{qa_data.get('case_id', 'unknown')}",
+                full_response,
+                'qa_review',
+                retrieval_meta=retrieval_payload,
+            )
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error:** {str(e)}"
