@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent / '.env', override=True)
 
 from services.claude_service import InsuranceAssistant, KB_DIR
+from services.audit_log import log_audit, get_audit_logs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,10 +51,26 @@ def chat():
         return jsonify({'error': 'messages must be a non-empty array'}), 400
 
     mode = data.get('mode', 'chat')
+    user_msg = messages[-1].get('content', '')[:200] if messages else ''
 
     def generate():
-        for chunk in assistant.chat_stream(messages, mode=mode):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        full_response = ''
+        error_msg = None
+        try:
+            for chunk in assistant.chat_stream(messages, mode=mode):
+                full_response += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            error_msg = str(e)
+            yield f"data: {json.dumps({'text': f'Error: {error_msg}'})}\n\n"
+        finally:
+            log_audit(
+                mode='chat',
+                input_reference={'question': user_msg},
+                output_result={'response_length': len(full_response)},
+                status='error' if error_msg else 'success',
+                error=error_msg,
+            )
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -153,9 +170,48 @@ def evaluate_case():
     case_data = data['caseData']
     messages = data.get('messages', [])
 
+    # run rules engine separately so we can capture result for audit log
+    rules_result = assistant.evaluate_with_rules_engine(case_data)
+    case_id = None
+    input_ref = {}
+    output_ref = {}
+    reasoning = None
+
+    if rules_result and 'error' not in rules_result:
+        case_id = rules_result.get('contract_no')
+        input_ref = {
+            'channel': rules_result.get('channel'),
+            'contract_no': rules_result.get('contract_no'),
+            'plan_code': rules_result.get('cnt_type'),
+        }
+        output_ref = {
+            'decision': rules_result.get('overall_decision'),
+            'trigger': rules_result.get('automation_trigger'),
+            'steps_failed': rules_result.get('steps_failed', []),
+            'outstanding_followups': rules_result.get('outstanding_followups', ''),
+        }
+        reasoning = rules_result.get('decision_reason')
+
     def generate():
-        for chunk in assistant.evaluate_stream(case_data, messages):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        full_response = ''
+        error_msg = None
+        try:
+            for chunk in assistant.evaluate_stream(case_data, messages):
+                full_response += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            error_msg = str(e)
+            yield f"data: {json.dumps({'text': f'Error: {error_msg}'})}\n\n"
+        finally:
+            log_audit(
+                mode='evaluate',
+                case_id=case_id,
+                input_reference=input_ref,
+                output_result=output_ref,
+                reasoning_summary=reasoning,
+                status='error' if error_msg else 'success',
+                error=error_msg,
+            )
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -179,9 +235,28 @@ def generate_email():
     email_data = data['emailData']
     messages = data.get('messages', [])
 
+    decision_type = email_data.get('decision_type', 'unknown')
+    tone = email_data.get('tone_required', 'unknown')
+
     def generate():
-        for chunk in assistant.email_draft_stream(email_data, messages):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        full_response = ''
+        error_msg = None
+        try:
+            for chunk in assistant.email_draft_stream(email_data, messages):
+                full_response += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            error_msg = str(e)
+            yield f"data: {json.dumps({'text': f'Error: {error_msg}'})}\n\n"
+        finally:
+            log_audit(
+                mode='email',
+                input_reference={'decision_type': decision_type, 'tone': tone},
+                output_result={'email_length': len(full_response)},
+                reasoning_summary=f'{decision_type} email drafted',
+                status='error' if error_msg else 'success',
+                error=error_msg,
+            )
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -205,9 +280,39 @@ def qa_review():
     qa_data = data['qaData']
     messages = data.get('messages', [])
 
+    qa_case_id = qa_data.get('case_id', qa_data.get('case_metadata', {}).get('case_id'))
+    qa_decision = qa_data.get('decision', qa_data.get('case_metadata', {}).get('decision'))
+    icd_cnt = qa_data.get('icd_cnt', qa_data.get('qa_indicators', {}).get('icd_cnt', 0))
+
+    # pre-calculate score for audit log
+    qa_score = assistant._calculate_qa_score(qa_data)
+
     def generate():
-        for chunk in assistant.qa_review_stream(qa_data, messages):
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        full_response = ''
+        error_msg = None
+        try:
+            for chunk in assistant.qa_review_stream(qa_data, messages):
+                full_response += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            error_msg = str(e)
+            yield f"data: {json.dumps({'text': f'Error: {error_msg}'})}\n\n"
+        finally:
+            log_audit(
+                mode='qa_review',
+                case_id=qa_case_id,
+                input_reference={'decision': qa_decision, 'icd_count': icd_cnt},
+                output_result={
+                    'risk_level': qa_score.get('risk_level'),
+                    'complexity_score': qa_score.get('complexity_score'),
+                    'recommendation': qa_score.get('recommendation'),
+                },
+                reasoning_summary='; '.join(
+                    f"{b[0]}: {b[2]}" for b in qa_score.get('breakdown', []) if b[1] > 0
+                ) or 'No risk factors',
+                status='error' if error_msg else 'success',
+                error=error_msg,
+            )
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -227,6 +332,15 @@ def get_logs():
     limit = request.args.get('limit', 50, type=int)
     logs = assistant.get_qa_logs(limit=limit)
     return jsonify({'logs': logs, 'total': len(logs)})
+
+
+@app.route('/api/audit-logs', methods=['GET'])
+def get_audit_logs_endpoint():
+    """pull audit trail entries for compliance review"""
+    limit = request.args.get('limit', 100, type=int)
+    mode_filter = request.args.get('mode', None)
+    logs = get_audit_logs(limit=limit, mode_filter=mode_filter)
+    return jsonify({'audit_logs': logs, 'total': len(logs)})
 
 
 @app.route('/api/documents/<filename>', methods=['DELETE'])
