@@ -3,9 +3,11 @@
 // NTU x Singlife veNTUre project
 
 const API_BASE = '';
+const MAX_CHAT_LOCAL_FILES = 5;
+const MAX_CHAT_LOCAL_FILE_BYTES = 5 * 1024 * 1024;
 
 // app state — conversations persist in localStorage between sessions
-let conversations = JSON.parse(localStorage.getItem('sl_convos') || '[]');
+let conversations = JSON.parse(localStorage.getItem('sl_convos') || '[]').map(normalizeConversation);
 let activeId = null;
 let isStreaming = false;
 let currentMode = 'chat'; // 'chat' or 'evaluate'
@@ -24,6 +26,7 @@ const newChatBtnEl   = document.getElementById('newChatBtn');
 const docListEl      = document.getElementById('documentList');
 const uploadBtnEl    = document.getElementById('uploadBtn');
 const fileInputEl    = document.getElementById('fileInput');
+const chatFileInputEl = document.getElementById('chatFileInput');
 const docCountEl     = document.getElementById('docCount');
 const inputNoteEl    = document.getElementById('inputNote');
 const sidebarEl      = document.getElementById('sidebar');
@@ -40,6 +43,8 @@ const modeEmailBtn   = document.getElementById('modeEmailBtn');
 const modeQABtn      = document.getElementById('modeQABtn');
 const modeLabelEl    = document.getElementById('modeLabel');
 const chatModeLabelEl = document.getElementById('chatModeLabel');
+const localAttachmentListWelcomeEl = document.getElementById('localAttachmentListWelcome');
+const localAttachmentListBottomEl = document.getElementById('localAttachmentListBottom');
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -191,12 +196,52 @@ async function uploadFile(file) {
   }
 }
 
-function triggerUpload() { fileInputEl.click(); }
-uploadBtnEl.addEventListener('click', triggerUpload);
-welcomeUploadEl.addEventListener('click', triggerUpload);
-chatUploadEl.addEventListener('click', triggerUpload);
+async function uploadChatLocalFile(file) {
+  if (!file) return;
+  if (file.size > MAX_CHAT_LOCAL_FILE_BYTES) {
+    alert('File too large. Max size is 5 MB for chat-local attachments.');
+    return;
+  }
+  if (!activeId) newConversation();
+  const conv = getActive();
+  if (conv && Array.isArray(conv.localAttachments) && conv.localAttachments.length >= MAX_CHAT_LOCAL_FILES) {
+    alert(`You can attach up to ${MAX_CHAT_LOCAL_FILES} files per chat.`);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(`${API_BASE}/api/chat/upload-local`, { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Chat attachment upload failed');
+      return;
+    }
+    if (data.attachment) {
+      const attachment = {
+        ...data.attachment,
+        uploadedAt: new Date().toISOString(),
+      };
+      upsertLocalAttachmentToActiveConversation(attachment);
+      hideWelcome();
+    }
+  } catch (err) {
+    alert('Chat attachment upload failed: ' + err.message);
+  }
+}
+
+function triggerKbUpload() { fileInputEl.click(); }
+function triggerChatUpload() { chatFileInputEl.click(); }
+
+uploadBtnEl.addEventListener('click', triggerKbUpload);
+welcomeUploadEl.addEventListener('click', triggerChatUpload);
+chatUploadEl.addEventListener('click', triggerChatUpload);
 fileInputEl.addEventListener('change', () => {
   if (fileInputEl.files.length > 0) { uploadFile(fileInputEl.files[0]); fileInputEl.value = ''; }
+});
+chatFileInputEl.addEventListener('change', () => {
+  if (chatFileInputEl.files.length > 0) { uploadChatLocalFile(chatFileInputEl.files[0]); chatFileInputEl.value = ''; }
 });
 
 // -- conversation management --
@@ -204,14 +249,62 @@ fileInputEl.addEventListener('change', () => {
 
 function save() { localStorage.setItem('sl_convos', JSON.stringify(conversations)); }
 function getActive() { return conversations.find(c => c.id === activeId) || null; }
+function normalizeConversation(conv) {
+  return {
+    ...conv,
+    localAttachments: Array.isArray(conv?.localAttachments) ? conv.localAttachments : [],
+  };
+}
+function upsertLocalAttachmentToActiveConversation(attachment) {
+  const conv = getActive();
+  if (!conv || !attachment) return;
+  if (!Array.isArray(conv.localAttachments)) conv.localAttachments = [];
+  conv.localAttachments = [
+    attachment,
+    ...conv.localAttachments.filter(a => a.id !== attachment.id),
+  ].slice(0, MAX_CHAT_LOCAL_FILES);
+  save();
+  renderLocalAttachments();
+}
+function removeLocalAttachmentFromActiveConversation(attachmentId) {
+  const conv = getActive();
+  if (!conv || !Array.isArray(conv.localAttachments)) return;
+  conv.localAttachments = conv.localAttachments.filter(a => a.id !== attachmentId);
+  save();
+  renderLocalAttachments();
+}
+function renderLocalAttachments() {
+  const conv = getActive();
+  const items = Array.isArray(conv?.localAttachments) ? conv.localAttachments : [];
+  const html = items.length === 0
+    ? `<span class="local-attach-empty">No chat-local files attached</span>`
+    : items.map(a => `
+      <div class="local-attach-chip" title="${a.filename}">
+        <span class="local-attach-name">${a.filename}</span>
+        <button class="local-attach-remove" data-attachment-id="${a.id}" title="Remove">×</button>
+      </div>
+    `).join('');
+
+  [localAttachmentListWelcomeEl, localAttachmentListBottomEl].forEach(container => {
+    if (!container) return;
+    container.innerHTML = html;
+    container.querySelectorAll('.local-attach-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeLocalAttachmentFromActiveConversation(btn.dataset.attachmentId);
+      });
+    });
+  });
+}
 
 function newConversation() {
   const id = `c_${Date.now()}`;
-  conversations.unshift({ id, title: 'New conversation', messages: [], ts: Date.now(), mode: currentMode });
+  conversations.unshift({ id, title: 'New conversation', messages: [], ts: Date.now(), mode: currentMode, localAttachments: [] });
   activeId = id;
   save();
   renderConvList();
   renderMessages([]);
+  renderLocalAttachments();
   showWelcome();
   userInputEl.focus();
 }
@@ -239,6 +332,7 @@ function deleteConversation(id) {
 function switchConversation(id) {
   activeId = id;
   renderConvList();
+  renderLocalAttachments();
   const conv = getActive();
   if (!conv) return;
   if (conv.messages.length === 0) { showWelcome(); renderMessages([]); }
@@ -428,7 +522,8 @@ async function sendMessage(text) {
   try {
     // pick endpoint based on mode
     let endpoint = `${API_BASE}/api/chat`;
-    let payload = { messages: conv.messages, mode: currentMode };
+    const localAttachments = Array.isArray(conv.localAttachments) ? conv.localAttachments.slice(0, MAX_CHAT_LOCAL_FILES) : [];
+    let payload = { messages: conv.messages, mode: currentMode, localAttachments };
 
     if (currentMode === 'evaluate') {
       let caseData = userText;
@@ -827,6 +922,7 @@ newChatBtnEl.addEventListener('click', () => newConversation());
   } else {
     activeId = conversations[0].id;
     renderConvList();
+    renderLocalAttachments();
     const conv = getActive();
     if (conv && conv.messages.length > 0) { hideWelcome(); renderMessages(conv.messages); }
     else showWelcome();

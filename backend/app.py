@@ -8,6 +8,8 @@ import os
 import json
 import logging
 import re
+import tempfile
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -15,6 +17,7 @@ load_dotenv(dotenv_path=Path(__file__).parent / '.env', override=True)
 
 from services.claude_service import InsuranceAssistant, KB_DIR
 from services.audit_log import log_audit, get_audit_logs
+from services.rag_service import extract_text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +30,10 @@ CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50mb max upload
 
 assistant = InsuranceAssistant()
+CHAT_LOCAL_ALLOWED = {'.txt', '.pdf', '.xlsx'}
+CHAT_LOCAL_MAX_FILES = 5
+CHAT_LOCAL_MAX_FILE_BYTES = 5 * 1024 * 1024
+CHAT_LOCAL_MAX_TEXT_CHARS = 200000
 
 
 @app.route('/')
@@ -52,12 +59,29 @@ def chat():
 
     mode = data.get('mode', 'chat')
     user_msg = messages[-1].get('content', '')[:200] if messages else ''
+    local_attachments = data.get('localAttachments', [])
+    if not isinstance(local_attachments, list):
+        local_attachments = []
+    local_attachments = local_attachments[:CHAT_LOCAL_MAX_FILES]
+    normalized_attachments = []
+    for item in local_attachments:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get('text', '')).strip()
+        if not text:
+            continue
+        normalized_attachments.append({
+            'id': str(item.get('id', '')),
+            'filename': str(item.get('filename', 'attachment')),
+            'filetype': str(item.get('filetype', 'txt')),
+            'text': text[:CHAT_LOCAL_MAX_TEXT_CHARS],
+        })
 
     def generate():
         full_response = ''
         error_msg = None
         try:
-            for chunk in assistant.chat_stream(messages, mode=mode):
+            for chunk in assistant.chat_stream(messages, mode=mode, local_attachments=normalized_attachments):
                 full_response += chunk
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
         except Exception as e:
@@ -103,7 +127,9 @@ def list_documents():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_document():
-    """upload a pdf or txt, extract the text, dump it into knowledge_base/"""
+    """Upload a document into knowledge_base/.
+    Supported types: .txt, .pdf, .xlsx.
+    Raw files are saved directly — the incremental indexer handles extraction."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
@@ -113,51 +139,94 @@ def upload_document():
 
     filename = file.filename
     ext = Path(filename).suffix.lower()
+    allowed = {'.txt', '.pdf', '.xlsx'}
 
-    if ext == '.pdf':
-        try:
-            import pypdf
-            reader = pypdf.PdfReader(file.stream)
-            pages = []
-            for page in reader.pages:
-                text = page.extract_text() or ""
-                if text.strip():
-                    pages.append(text.strip())
-            text = "\n\n".join(pages)
+    if ext not in allowed:
+        return jsonify({'error': f'Unsupported file type. Upload a {", ".join(allowed)} file.'}), 400
 
-            if not text.strip():
-                return jsonify({'error': 'No text could be extracted. The PDF may be image-based (scanned).'}), 400
-        except ImportError:
-            return jsonify({'error': 'pypdf is not installed on the server'}), 500
-        except Exception as e:
-            return jsonify({'error': f'Failed to read PDF: {str(e)}'}), 400
-
-    elif ext == '.txt':
-        text = file.read().decode('utf-8', errors='replace')
-    else:
-        return jsonify({'error': 'Unsupported file type. Upload a .pdf or .txt file.'}), 400
-
-    # clean up the filename so it doesn't break anything
     KB_DIR.mkdir(exist_ok=True)
     slug = re.sub(r'[^a-z0-9]+', '_', Path(filename).stem.lower()).strip('_')
-    out_path = KB_DIR / f"{slug}.txt"
+    out_path = KB_DIR / f"{slug}{ext}"
 
-    header = (
-        f"# {Path(filename).stem}\n"
-        f"Source file: {filename}\n\n"
-        f"{'─' * 80}\n\n"
-    )
-    out_path.write_text(header + text, encoding='utf-8')
-    logger.info(f"Document uploaded: {filename} → {out_path.name} ({len(text):,} chars)")
+    if ext == '.txt':
+        text = file.read().decode('utf-8', errors='replace')
+        header = (
+            f"# {Path(filename).stem}\n"
+            f"Source file: {filename}\n\n"
+            f"{'─' * 80}\n\n"
+        )
+        out_path.write_text(header + text, encoding='utf-8')
+        size_display = f"{len(text):,} chars"
+    else:
+        raw = file.read()
+        out_path.write_bytes(raw)
+        size_display = f"{len(raw):,} bytes"
+
+    logger.info(f"Document uploaded: {filename} → {out_path.name} ({size_display})")
 
     assistant.reload_knowledge_base()
 
     return jsonify({
         'success': True,
         'filename': out_path.name,
-        'chars': len(text),
+        'chars': out_path.stat().st_size,
         'documents': assistant.documents,
     })
+
+
+@app.route('/api/chat/upload-local', methods=['POST'])
+def upload_chat_local():
+    """Upload a file for chat-local context only.
+    This does NOT write to knowledge_base/ and does NOT trigger re-index."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+
+    filename = file.filename
+    ext = Path(filename).suffix.lower()
+    if ext not in CHAT_LOCAL_ALLOWED:
+        return jsonify({'error': f'Unsupported file type. Upload a {", ".join(sorted(CHAT_LOCAL_ALLOWED))} file.'}), 400
+
+    raw = file.read()
+    if len(raw) > CHAT_LOCAL_MAX_FILE_BYTES:
+        return jsonify({'error': 'File too large. Max size is 5 MB for chat-local uploads.'}), 400
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(raw)
+            tmp_path = Path(tmp.name)
+
+        text = extract_text(tmp_path)
+        if not text or not text.strip():
+            return jsonify({'error': 'Could not extract readable text from this file.'}), 400
+
+        trimmed = text.strip()
+        if len(trimmed) > CHAT_LOCAL_MAX_TEXT_CHARS:
+            trimmed = trimmed[:CHAT_LOCAL_MAX_TEXT_CHARS]
+
+        return jsonify({
+            'success': True,
+            'attachment': {
+                'id': uuid.uuid4().hex,
+                'filename': filename,
+                'filetype': ext.lstrip('.'),
+                'text': trimmed,
+                'chars': len(trimmed),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Chat-local upload extraction failed for {filename}: {e}")
+        return jsonify({'error': f'Failed to process file: {str(e)}'}), 400
+    finally:
+        if tmp_path and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
 
 
 @app.route('/api/evaluate', methods=['POST'])

@@ -361,6 +361,51 @@ body { display: flex; height: 100vh; overflow: hidden; }
   max-width: 620px;
 }
 
+.local-attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.local-attach-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.local-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border-l);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+
+.local-attach-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.local-attach-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.local-attach-remove:hover {
+  color: var(--danger);
+}
+
 /* input bar — used in both welcome and bottom */
 
 .input-bar {
