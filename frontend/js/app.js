@@ -461,11 +461,20 @@ function appendMessage(role, content, streaming = false) {
     const conv = getActive();
     const msgMode = conv?.mode || currentMode;
 
+    let extraBtn = '';
+    if (msgMode === 'evaluate') {
+      const evalData = extractEvalDecision(content);
+      if (evalData) {
+        extraBtn = `<button class="export-btn draft-email-btn" data-eval='${JSON.stringify(evalData).replace(/'/g, "&#39;")}' title="Draft customer email based on this evaluation">Draft Email for ${evalData.contract_no || 'this case'}</button>`;
+      }
+    }
+
     exportBar.innerHTML = `
       <span class="export-label">Export</span>
       <button class="export-btn" data-format="json" title="Download as JSON">JSON</button>
       <button class="export-btn" data-format="csv" title="Download as CSV">CSV</button>
       <button class="export-btn" data-format="excel" title="Download as Excel">Excel</button>
+      ${extraBtn}
     `;
 
     exportBar.querySelectorAll('.export-btn').forEach(btn => {
@@ -474,6 +483,9 @@ function appendMessage(role, content, streaming = false) {
         if (fmt === 'json') exportAsJson(content, msgMode);
         else if (fmt === 'csv') exportAsCsv(content, msgMode);
         else if (fmt === 'excel') exportAsExcel(content, msgMode);
+        else if (btn.classList.contains('draft-email-btn')) {
+          draftEmailFromEval(JSON.parse(btn.dataset.eval));
+        }
       });
     });
 
@@ -605,12 +617,28 @@ async function sendMessage(text) {
       <button class="export-btn" data-format="csv" title="Download as CSV">CSV</button>
       <button class="export-btn" data-format="excel" title="Download as Excel">Excel</button>
     `;
+    // add draft email button inline for evaluate mode
+    if (msgMode === 'evaluate') {
+      const evalData = extractEvalDecision(fullText);
+      if (evalData) {
+        exportBar.innerHTML += `
+          <button class="export-btn draft-email-btn" data-eval='${JSON.stringify(evalData).replace(/'/g, "&#39;")}' title="Draft customer email based on this evaluation">
+            Draft Email for ${evalData.contract_no || 'this case'}
+          </button>
+        `;
+      }
+    }
+
     exportBar.querySelectorAll('.export-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const fmt = btn.dataset.format;
         if (fmt === 'json') exportAsJson(fullText, msgMode);
         else if (fmt === 'csv') exportAsCsv(fullText, msgMode);
         else if (fmt === 'excel') exportAsExcel(fullText, msgMode);
+        else if (btn.classList.contains('draft-email-btn')) {
+          const evalData = JSON.parse(btn.dataset.eval);
+          draftEmailFromEval(evalData);
+        }
       });
     });
     lastMsg.appendChild(exportBar);
@@ -618,6 +646,69 @@ async function sendMessage(text) {
 
   scrollToBottom();
   chatInputEl.focus();
+}
+
+// -- draft email from evaluation --
+
+function extractEvalDecision(text) {
+  // try to extract decision data from the evaluation response JSON block
+  const jsonBlocks = extractJsonFromMarkdown(text);
+  for (const block of jsonBlocks) {
+    if (block.overall_decision || block.decision) {
+      const meta = block.report_metadata || {};
+      return {
+        contract_no: block.contract_no || meta.contract_no || block.case_id || '',
+        decision: block.overall_decision || block.decision || '',
+        decision_reason: block.decision_reason || block.ops_outcome || '',
+        channel: block.channel || meta.channel || '',
+      };
+    }
+  }
+  // fallback: try to parse from text patterns
+  const decisionMatch = text.match(/Overall Decision[:\s]*\**\s*(Standard|Refer|Decline|Postpone|Withdrawal)[^\n]*/i);
+  const contractMatch = text.match(/Contract\s*(?:No|Number)[.:\s]*\**\s*([A-Z0-9]+)/i);
+  if (decisionMatch) {
+    return {
+      contract_no: contractMatch ? contractMatch[1] : '',
+      decision: decisionMatch[1].trim(),
+      decision_reason: '',
+      channel: '',
+    };
+  }
+  return null;
+}
+
+function draftEmailFromEval(evalData) {
+  // map evaluation decision to email decision type and tone
+  const decisionMap = {
+    'Standard': { type: 'Approval', tone: 'Supportive', summary: 'Your application has been approved.' },
+    'StandardWithFurtherRequirements': { type: 'Pending', tone: 'Reassuring', summary: 'Your application requires additional information before we can proceed.' },
+    'ReferToUW': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' },
+    'Refer UW': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' },
+    'TriggerGNS': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application is undergoing additional compliance review.' },
+    'Withdrawal': { type: 'Withdrawal', tone: 'Empathetic', summary: 'We have received and processed your withdrawal request.' },
+  };
+
+  const mapped = decisionMap[evalData.decision] || { type: 'Decline', tone: 'Empathetic', summary: 'Unable to offer coverage at this time.' };
+
+  const emailPayload = {
+    decision_type: mapped.type,
+    customer_name: '[Customer Name]',
+    outcome_summary: mapped.summary,
+    tone_required: mapped.tone,
+    source_case: evalData.contract_no,
+    source_decision: evalData.decision,
+    source_reason: evalData.decision_reason,
+  };
+
+  // switch to email mode, open new chat, and auto-send
+  setMode('email');
+  newConversation();
+
+  setTimeout(() => {
+    const jsonStr = JSON.stringify(emailPayload, null, 2);
+    sendMessage(jsonStr);
+  }, 500);
 }
 
 // -- export functions --
