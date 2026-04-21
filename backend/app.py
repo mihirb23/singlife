@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent / '.env', override=True)
 
 from services.claude_service import InsuranceAssistant, KB_DIR
-from services.audit_log import log_audit, get_audit_logs
+from services.audit_log import log_audit, get_audit_logs, check_audit_auth
 from services.rag_service import extract_text
 
 logging.basicConfig(
@@ -410,11 +410,18 @@ def get_logs():
 
 @app.route('/api/audit-logs', methods=['GET'])
 def get_audit_logs_endpoint():
-    """pull audit trail entries for compliance review"""
+    """pull audit trail entries for compliance review — requires X-Audit-Key header when AUDIT_API_KEY is set"""
+    if not check_audit_auth(request.headers):
+        return jsonify({'error': 'Unauthorized — provide valid X-Audit-Key header'}), 401
+
     limit = request.args.get('limit', 100, type=int)
     mode_filter = request.args.get('mode', None)
-    logs = get_audit_logs(limit=limit, mode_filter=mode_filter)
-    return jsonify({'audit_logs': logs, 'total': len(logs)})
+    result = get_audit_logs(limit=limit, mode_filter=mode_filter)
+    return jsonify({
+        'audit_logs': result['entries'],
+        'total': len(result['entries']),
+        'skipped_corrupt_lines': result['skipped'],
+    })
 
 
 @app.route('/api/documents/<filename>', methods=['DELETE'])

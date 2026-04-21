@@ -116,18 +116,39 @@
 <script>
 let currentLogs = [];
 
+function getAuditKey() {
+  let key = sessionStorage.getItem('audit_key');
+  if (!key) {
+    key = prompt('Enter Audit API Key (leave blank if none configured):') || '';
+    sessionStorage.setItem('audit_key', key);
+  }
+  return key;
+}
+
 async function loadLogs() {
   const mode = document.getElementById('modeFilter').value;
   const limit = document.getElementById('limitSelect').value;
   let url = `/api/audit-logs?limit=${limit}`;
   if (mode) url += `&mode=${mode}`;
 
+  const headers = {};
+  const key = getAuditKey();
+  if (key) headers['X-Audit-Key'] = key;
+
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(url, { headers });
+    if (resp.status === 401) {
+      sessionStorage.removeItem('audit_key');
+      alert('Invalid audit key. Please try again.');
+      return loadLogs();
+    }
     const data = await resp.json();
     currentLogs = (data.audit_logs || []).reverse(); // newest first
     renderTable(currentLogs);
     renderStats(currentLogs);
+    if (data.skipped_corrupt_lines > 0) {
+      console.warn(`${data.skipped_corrupt_lines} corrupt log lines were skipped`);
+    }
   } catch (e) {
     console.error('Failed to load audit logs:', e);
   }
