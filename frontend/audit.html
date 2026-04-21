@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Singlife AI Ops — Audit Log</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --card: #141414; --border: #2a2a2a; --text: #e8e8e8;
+      --dim: #8b8b8b; --accent: #e8364e; --blue: #3b82f6; --green: #22c55e;
+      --yellow: #eab308; --red: #ef4444; --font: 'Inter', system-ui, sans-serif;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 1.4rem; font-weight: 600; }
+    .header a { color: var(--blue); text-decoration: none; font-size: 0.85rem; }
+    .header a:hover { text-decoration: underline; }
+
+    .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .controls select, .controls input, .controls button {
+      font-family: var(--font); font-size: 0.82rem; padding: 6px 12px;
+      background: var(--card); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; outline: none;
+    }
+    .controls button { cursor: pointer; background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 500; }
+    .controls button:hover { opacity: 0.9; }
+    .controls .export-btn { background: var(--card); border-color: var(--border); color: var(--text); }
+
+    .stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; min-width: 120px; }
+    .stat-card .label { font-size: 0.72rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 1.3rem; font-weight: 600; margin-top: 4px; }
+    .stat-card .value.success { color: var(--green); }
+    .stat-card .value.error { color: var(--red); }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    thead { background: var(--card); position: sticky; top: 0; }
+    th { padding: 10px 12px; text-align: left; font-weight: 600; font-size: 0.72rem; text-transform: uppercase;
+         letter-spacing: 0.5px; color: var(--dim); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:hover { background: rgba(255,255,255,0.03); }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 500; }
+    .badge-success { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-error { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge-mode { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+    .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; color: var(--dim); }
+    .reasoning { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .reasoning:hover { white-space: normal; word-break: break-word; }
+    .input-ref { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .input-ref:hover { white-space: normal; word-break: break-word; }
+
+    .empty { text-align: center; padding: 60px 20px; color: var(--dim); }
+    .empty p { margin-top: 8px; font-size: 0.85rem; }
+
+    .version-tag { font-size: 0.7rem; color: var(--dim); background: var(--card); padding: 2px 6px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Audit Log</h1>
+    <a href="/">Back to AI Assistant</a>
+  </div>
+
+  <div class="controls">
+    <select id="modeFilter">
+      <option value="">All modes</option>
+      <option value="evaluate">Evaluate</option>
+      <option value="chat">Chat</option>
+      <option value="email">Email</option>
+      <option value="qa_review">QA Review</option>
+    </select>
+    <select id="limitSelect">
+      <option value="25">Last 25</option>
+      <option value="50">Last 50</option>
+      <option value="100" selected>Last 100</option>
+      <option value="500">Last 500</option>
+    </select>
+    <button onclick="loadLogs()">Refresh</button>
+    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    <button class="export-btn" onclick="exportJSON()">Export JSON</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Request ID</th>
+          <th>Mode</th>
+          <th>Case ID</th>
+          <th>Input Reference</th>
+          <th>Decision / Output</th>
+          <th>Reasoning Summary</th>
+          <th>Versions</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+
+  <div class="empty" id="emptyState" style="display:none;">
+    <p>No audit log entries found.</p>
+    <p>Run an evaluation, chat, email draft, or QA review to generate entries.</p>
+  </div>
+
+<script>
+let currentLogs = [];
+
+async function loadLogs() {
+  const mode = document.getElementById('modeFilter').value;
+  const limit = document.getElementById('limitSelect').value;
+  let url = `/api/audit-logs?limit=${limit}`;
+  if (mode) url += `&mode=${mode}`;
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    currentLogs = (data.audit_logs || []).reverse(); // newest first
+    renderTable(currentLogs);
+    renderStats(currentLogs);
+  } catch (e) {
+    console.error('Failed to load audit logs:', e);
+  }
+}
+
+function renderStats(logs) {
+  const total = logs.length;
+  const success = logs.filter(l => l.status === 'success').length;
+  const errors = logs.filter(l => l.status === 'error').length;
+  const modes = {};
+  logs.forEach(l => { modes[l.mode] = (modes[l.mode] || 0) + 1; });
+
+  let html = `
+    <div class="stat-card"><div class="label">Total Requests</div><div class="value">${total}</div></div>
+    <div class="stat-card"><div class="label">Success</div><div class="value success">${success}</div></div>
+    <div class="stat-card"><div class="label">Errors</div><div class="value error">${errors}</div></div>
+  `;
+  for (const [mode, count] of Object.entries(modes)) {
+    html += `<div class="stat-card"><div class="label">${mode}</div><div class="value">${count}</div></div>`;
+  }
+  document.getElementById('stats').innerHTML = html;
+}
+
+function renderTable(logs) {
+  const body = document.getElementById('logBody');
+  const empty = document.getElementById('emptyState');
+
+  if (!logs.length) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  body.innerHTML = logs.map(log => {
+    const ts = log.timestamp ? new Date(log.timestamp).toLocaleString() : '—';
+    const reqId = log.request_id || '—';
+    const mode = log.mode || '—';
+    const caseId = log.case_id || '—';
+    const input = formatObj(log.input_reference);
+    const output = formatOutput(log.output_result, log.mode);
+    const reasoning = log.reasoning_summary || '—';
+    const versions = formatVersions(log.versions);
+    const status = log.status || 'unknown';
+    const error = log.error;
+
+    return `<tr>
+      <td class="mono">${ts}</td>
+      <td class="mono">${reqId}</td>
+      <td><span class="badge badge-mode">${mode}</span></td>
+      <td class="mono">${caseId}</td>
+      <td class="input-ref" title="${escHtml(JSON.stringify(log.input_reference || {}))}">${input}</td>
+      <td>${output}</td>
+      <td class="reasoning" title="${escHtml(reasoning)}">${escHtml(reasoning)}</td>
+      <td>${versions}</td>
+      <td><span class="badge ${status === 'success' ? 'badge-success' : 'badge-error'}">${status}</span>
+          ${error ? `<br><span class="mono" style="color:var(--red);font-size:0.7rem;">${escHtml(error)}</span>` : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function formatObj(obj) {
+  if (!obj || !Object.keys(obj).length) return '—';
+  return Object.entries(obj)
+    .filter(([k,v]) => v !== null && v !== undefined && v !== '')
+    .map(([k,v]) => `<strong>${k}:</strong> ${escHtml(String(v))}`)
+    .join('<br>');
+}
+
+function formatOutput(obj, mode) {
+  if (!obj || !Object.keys(obj).length) return '—';
+  if (mode === 'evaluate') {
+    const d = obj.decision || '—';
+    const t = obj.trigger || '—';
+    const f = (obj.steps_failed || []).join(', ') || 'none';
+    return `<strong>${d}</strong><br>trigger: ${t}<br>failed: ${f}`;
+  }
+  if (mode === 'qa_review') {
+    return `<strong>${obj.risk_level || '—'}</strong> (score: ${obj.complexity_score || '—'})<br>${obj.recommendation || ''}`;
+  }
+  return Object.entries(obj)
+    .map(([k,v]) => `${k}: ${escHtml(String(v))}`)
+    .join('<br>');
+}
+
+function formatVersions(v) {
+  if (!v) return '—';
+  const parts = [];
+  if (v.sop_id) parts.push(`<span class="version-tag">${v.sop_id}</span>`);
+  if (v.model) parts.push(`<span class="version-tag">${v.model}</span>`);
+  return parts.join(' ') || '—';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function exportCSV() {
+  if (!currentLogs.length) return;
+  const headers = ['timestamp','request_id','mode','case_id','input_reference','output_result','reasoning_summary','versions','status','error'];
+  const rows = currentLogs.map(l => headers.map(h => {
+    const v = l[h];
+    if (v && typeof v === 'object') return JSON.stringify(v);
+    return String(v ?? '');
+  }));
+  const csv = '\uFEFF' + [headers.join(','), ...rows.map(r => r.map(c =>
+    c.includes(',') || c.includes('"') || c.includes('\n') ? `"${c.replace(/"/g,'""')}"` : c
+  ).join(','))].join('\n');
+  downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), `audit_log_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportJSON() {
+  if (!currentLogs.length) return;
+  downloadBlob(new Blob([JSON.stringify(currentLogs, null, 2)], {type:'application/json'}), `audit_log_${new Date().toISOString().slice(0,10)}.json`);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// auto-load on page open
+loadLogs();
+</script>
+
+</body>
+</html>

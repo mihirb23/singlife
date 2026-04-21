@@ -46,6 +46,11 @@ def architecture():
     return send_from_directory(app.static_folder, 'architecture.html')
 
 
+@app.route('/audit')
+def audit_page():
+    return send_from_directory(app.static_folder, 'audit.html')
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """stream claude's response back via SSE so we get the typing effect"""
