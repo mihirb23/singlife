@@ -615,6 +615,8 @@ class InsuranceAssistant:
                 user_msg = m.get('content', '')
                 break
 
+        pf = PrivacyFilter()
+
         # retrieve context via intent-aware strategy (named-file/full/expanded/fallback)
         retrieval_payload = self._prepare_retrieval_context(
             user_msg,
@@ -625,20 +627,22 @@ class InsuranceAssistant:
         if retrieval_payload.get("retrieval_mode") == "clarification":
             clarification = retrieval_payload.get("clarification_message", "Please clarify which file you want.")
             yield clarification
-            log_qa(user_msg, clarification, mode, retrieval_meta=retrieval_payload)
+            log_qa(pf.sanitize_text(user_msg), clarification, mode, retrieval_meta=retrieval_payload)
             return
 
         rag_context = retrieval_payload.get("context_text", "")
         local_context = self._build_local_attachments_context(local_attachments)
 
+        # mask PII in local attachment content and conversation messages before sending to Anthropic
+        sanitized_local = pf.sanitize_text(local_context) if local_context else local_context
+        trimmed = _trim_messages(messages)
+        masked_messages = pf.sanitize_for_llm(trimmed)
+
         # build system prompt with RAG context
         system_prompt = SYSTEM_PROMPT_BASE
-        if local_context:
-            system_prompt += f"\n\n{local_context}"
+        if sanitized_local:
+            system_prompt += f"\n\n{sanitized_local}"
         system_prompt += f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
-
-        # trim conversation to avoid context overflow
-        trimmed = _trim_messages(messages)
 
         try:
             full_response = ''
@@ -646,13 +650,13 @@ class InsuranceAssistant:
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=system_prompt,
-                messages=trimmed,
+                messages=masked_messages,
             ) as stream:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
 
-            log_qa(user_msg, full_response, mode, retrieval_meta=retrieval_payload)
+            log_qa(pf.sanitize_text(user_msg), full_response, mode, retrieval_meta=retrieval_payload)
 
         except Exception as e:
             logger.error(f"Claude API error: {e}")
@@ -710,7 +714,9 @@ class InsuranceAssistant:
             eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
         else:
             # rules engine couldn't parse it — fall back to full LLM evaluation
-            fallback_query = str(case_data)
+            pf = PrivacyFilter()
+            sanitized_case = pf.sanitize_for_llm(case_data)
+            fallback_query = str(case_data)  # use original for local RAG retrieval only
             retrieval_payload = self._prepare_retrieval_context(fallback_query, top_k=10, prefer_full_named_file=False)
             self._log_retrieval_telemetry(fallback_query, retrieval_payload)
             rag_context = retrieval_payload.get("context_text", "")
@@ -719,7 +725,7 @@ class InsuranceAssistant:
             eval_prompt = (
                 "Evaluate the following case against SOP-NBIG-STP-001. "
                 "Go through EVERY applicable step. Show Pass/Fail/Skip for each.\n\n"
-                f"**Case Data:**\n```\n{json.dumps(case_data, indent=2) if isinstance(case_data, dict) else str(case_data)}\n```\n\n"
+                f"**Case Data:**\n```\n{json.dumps(sanitized_case, indent=2) if isinstance(sanitized_case, dict) else str(sanitized_case)}\n```\n\n"
                 "Provide the full 5-part evaluation format."
             )
             eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
@@ -736,7 +742,8 @@ class InsuranceAssistant:
                     full_response += text
                     yield text
 
-            user_msg = str(case_data)[:500] if isinstance(case_data, dict) else str(case_data)[:500]
+            masked_log = PrivacyFilter().sanitize_for_llm(case_data)
+            user_msg = str(masked_log)[:500]
             log_qa(user_msg, full_response, 'evaluate', retrieval_meta=retrieval_payload)
 
         except Exception as e:
