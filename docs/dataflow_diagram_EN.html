@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Singlife AI Ops — Data Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue: #3b82f6;
+  --blue-dim: rgba(59,130,246,0.1);
+  --green: #10b981;
+  --green-dim: rgba(16,185,129,0.1);
+  --violet: #8b5cf6;
+  --violet-dim: rgba(139,92,246,0.1);
+  --rose: #f43f5e;
+  --rose-dim: rgba(244,63,94,0.1);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.1);
+  --cyan: #06b6d4;
+  --cyan-dim: rgba(6,182,212,0.1);
+  --surface: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.12);
+  --text: #e2e4e9;
+  --muted: #9ca3af;
+  --faint: #6b7280;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #08090f;
+  color: var(--text);
+  padding: 48px 40px;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ── HEADER ── */
+.header { margin-bottom: 40px; }
+
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);
+  color: #10b981; font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 4px 12px; border-radius: 999px; text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.status-pill span {
+  width: 6px; height: 6px; border-radius: 50%; background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+.page-title {
+  font-size: 32px; font-weight: 700; letter-spacing: -0.03em;
+  background: linear-gradient(120deg, #ffffff 0%, #9ca3af 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  margin-bottom: 8px;
+}
+.page-meta { font-size: 13px; color: var(--faint); margin-bottom: 18px; }
+.verify-bar {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.12);
+  border-radius: 8px; padding: 9px 14px; font-size: 12px; color: var(--muted);
+}
+.verify-bar strong { color: #10b981; }
+code {
+  color: #60a5fa; background: rgba(59,130,246,0.1);
+  padding: 1px 6px; border-radius: 4px; font-size: 11px; font-family: 'SF Mono', monospace;
+}
+
+/* ── LEGEND ── */
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 32px 0; }
+.legend-item {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 999px; font-size: 11px; color: var(--muted);
+}
+.legend-dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── DIAGRAM GRID ── */
+.diagram {
+  display: grid;
+  grid-template-columns: 1fr 52px 1.15fr 52px 1fr 52px 1fr;
+  gap: 0;
+  align-items: start;
+  margin-bottom: 48px;
+}
+
+/* ── ZONE ── */
+.zone {
+  border-radius: 14px; padding: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.zone-i   { border-color: rgba(59,130,246,0.18); background: rgba(59,130,246,0.025); }
+.zone-ii  { border-color: rgba(16,185,129,0.18); background: rgba(16,185,129,0.025); }
+.zone-iii { border-color: rgba(139,92,246,0.18); background: rgba(139,92,246,0.025); }
+.zone-iv  { border-color: rgba(244,63,94,0.18); background: rgba(244,63,94,0.025); }
+
+.zone-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.zone-badge {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+.zone-badge-i  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.zone-badge-ii { background: rgba(16,185,129,0.15); color: #34d399; }
+.zone-badge-iii{ background: rgba(139,92,246,0.15); color: #a78bfa; }
+.zone-badge-iv { background: rgba(244,63,94,0.15);  color: #fb7185; }
+
+.zone-name { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.zone-desc { font-size: 10px; color: var(--faint); margin-top: 2px; }
+.zone-i   .zone-name { color: #60a5fa; }
+.zone-ii  .zone-name { color: #34d399; }
+.zone-iii .zone-name { color: #a78bfa; }
+.zone-iv  .zone-name { color: #fb7185; }
+
+/* ── CARD ── */
+.card {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 10px; padding: 13px 14px; margin-bottom: 8px;
+}
+.card:last-child { margin-bottom: 0; }
+
+.card-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--faint); margin-bottom: 4px;
+}
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.card-sub   { font-size: 10px; color: var(--faint); margin-bottom: 8px; }
+.card-rows  { font-size: 11px; color: var(--muted); line-height: 1.7; }
+.card-rows li { list-style: none; padding-left: 12px; position: relative; }
+.card-rows li::before { content: '·'; position: absolute; left: 3px; color: var(--faint); }
+
+.card-accent-blue   { border-left: 2px solid var(--blue); }
+.card-accent-green  { border-left: 2px solid var(--green); }
+.card-accent-violet { border-left: 2px solid var(--violet); }
+.card-accent-rose   { border-left: 2px solid var(--rose); }
+.card-accent-amber  { border-left: 2px solid var(--amber); background: rgba(245,158,11,0.03); }
+.card-accent-cyan   { border-left: 2px solid var(--cyan); background: rgba(6,182,212,0.03); }
+.card-warn          { background: rgba(245,158,11,0.05); border-color: rgba(245,158,11,0.2); }
+.card-dashed        { border-style: dashed; border-color: rgba(255,255,255,0.06); opacity: 0.65; }
+
+/* ── BADGE ── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+}
+.badge-red    { background: rgba(244,63,94,0.12); color: #fb7185; border: 1px solid rgba(244,63,94,0.2); }
+.badge-amber  { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+.badge-green  { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+.badge-blue   { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+.badge-gray   { background: rgba(107,114,128,0.1); color: #9ca3af; border: 1px solid rgba(107,114,128,0.2); }
+.badge-row    { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+
+.warn-line { display: flex; align-items: flex-start; gap: 5px; font-size: 10px; color: #fbbf24; margin-top: 5px; line-height: 1.45; }
+.warn-line::before { content: '⚠'; flex-shrink: 0; font-size: 9px; margin-top: 1px; }
+.good-line { display: flex; align-items: flex-start; gap: 5px; font-size: 10px; color: #34d399; margin-top: 5px; }
+.good-line::before { content: '✓'; flex-shrink: 0; font-size: 9px; }
+
+/* ── MODE GRID ── */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.mode-chip {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px;
+}
+.mode-chip .mc-name { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.mode-chip .mc-path { font-size: 9px; color: var(--faint); margin-bottom: 4px; }
+.mode-chip.mc-warn  { border-color: rgba(244,63,94,0.2); background: rgba(244,63,94,0.05); }
+.mode-chip.mc-ok    { border-color: rgba(245,158,11,0.2); background: rgba(245,158,11,0.04); }
+
+/* ── ZONE CONNECTOR ── */
+.connector {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; padding-top: 50px; gap: 24px;
+}
+
+.flow {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 52px;
+}
+.flow-line {
+  width: 28px; height: 1px;
+  position: relative;
+}
+.flow-right { background: linear-gradient(to right, transparent, currentColor 60%); }
+.flow-left  { background: linear-gradient(to left, transparent, currentColor 60%); }
+
+.flow-arrow-r, .flow-arrow-l {
+  font-size: 16px; line-height: 1; color: var(--faint);
+}
+.flow-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--faint); text-align: center;
+  line-height: 1.3; max-width: 48px; word-break: break-word;
+}
+.flow-red    .flow-arrow-r, .flow-red    .flow-label { color: rgba(244,63,94,0.7); }
+.flow-green  .flow-arrow-l, .flow-green  .flow-label { color: rgba(16,185,129,0.7); }
+.flow-violet .flow-arrow-r, .flow-violet .flow-label { color: rgba(139,92,246,0.7); }
+.flow-blue   .flow-arrow-r, .flow-blue   .flow-label { color: rgba(59,130,246,0.7); }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 11px; font-weight: 700; color: var(--faint);
+  letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 16px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── PII LIFECYCLE ── */
+.lifecycle { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 48px; }
+
+.stage {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; position: relative;
+}
+.stage::after {
+  content: '→'; position: absolute; right: -13px; top: 50%;
+  transform: translateY(-50%); color: var(--faint); font-size: 13px; z-index: 1;
+}
+.stage:last-child::after { display: none; }
+
+.stage-num  { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 5px; }
+.stage-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.stage-body { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.stage-body li { list-style: none; padding-left: 10px; position: relative; }
+.stage-body li::before { content: '·'; position: absolute; left: 2px; color: var(--faint); }
+
+.stage-collect { border-color: rgba(244,63,94,0.2); }
+.stage-collect .stage-num { color: #fb7185; }
+.stage-mask    { border-color: rgba(245,158,11,0.2); }
+.stage-mask    .stage-num { color: #fbbf24; }
+.stage-ai      { border-color: rgba(139,92,246,0.2); }
+.stage-ai      .stage-num { color: #a78bfa; }
+.stage-persist { border-color: rgba(245,158,11,0.2); }
+.stage-persist .stage-num { color: #fbbf24; }
+.stage-output  { border-color: rgba(16,185,129,0.2); }
+.stage-output  .stage-num { color: #34d399; }
+
+/* ── TABLES ── */
+.table-section { margin-bottom: 36px; }
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  padding: 10px 16px; text-align: left;
+  font-size: 10px; font-weight: 700; color: var(--faint);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--muted); vertical-align: middle; line-height: 1.45;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(255,255,255,0.015); }
+
+/* ── NOTE BAR ── */
+.note-bar {
+  background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.18);
+  border-radius: 8px; padding: 11px 16px;
+  font-size: 12px; color: var(--muted); margin-top: 32px;
+}
+.note-bar strong { color: #fbbf24; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<div class="header">
+  <div class="status-pill"><span></span>Code Verified · v1.1 · 2026-04-28</div>
+  <h1 class="page-title">Singlife AI Ops — Data Flow</h1>
+  <p class="page-meta">LTC QnB Underwriting Automation &nbsp;·&nbsp; PII flow tracking &nbsp;·&nbsp; NBIG CareShield</p>
+  <div class="verify-bar">
+    <strong>Verified against</strong>
+    <code>backend/app.py</code> <code>backend/services/*.py</code> <code>frontend/js/app.js</code>
+    &nbsp;·&nbsp; Items marked vendor policy are external claims, not code-verified
+  </div>
+</div>
+
+<!-- ══════════ LEGEND ══════════ -->
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Frontend (Browser)</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Backend (Flask)</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#8b5cf6"></span>AI / ML</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Local Storage</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#f43f5e"></span>External Service</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#06b6d4"></span>Knowledge Source</div>
+  <div class="legend-item"><span class="badge badge-red">PII</span>&nbsp;sensitive personal data</div>
+  <div class="legend-item"><span class="badge badge-amber">Masked</span>&nbsp;after PrivacyFilter</div>
+  <div class="legend-item"><span class="badge badge-green">No PII</span>&nbsp;no personal data</div>
+</div>
+
+<!-- ══════════ MAIN DIAGRAM ══════════ -->
+<div class="diagram">
+
+  <!-- ── ZONE I: BROWSER ── -->
+  <div class="zone zone-i">
+    <div class="zone-header">
+      <div class="zone-badge zone-badge-i">I</div>
+      <div>
+        <div class="zone-name">Browser</div>
+        <div class="zone-desc">User Layer</div>
+      </div>
+    </div>
+
+    <div class="card card-accent-blue">
+      <div class="card-label">SPA</div>
+      <div class="card-title">Frontend App</div>
+      <div class="card-sub">index.html + app.js</div>
+      <ul class="card-rows">
+        <li>4 modes: Chat / Evaluate / Email / QA</li>
+        <li>Form collection — case JSON</li>
+        <li>SSE streaming render</li>
+        <li>Markdown to HTML</li>
+      </ul>
+      <div class="badge-row">
+        <span class="badge badge-red">PII Input</span>
+        <span class="badge badge-blue">localStorage</span>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(244,63,94,0.15);">
+      <div class="card-label">Input Fields</div>
+      <div class="card-title">User-Submitted Data</div>
+      <ul class="card-rows" style="margin-top:6px">
+        <li>case_id, NRIC, name, DOB, sex</li>
+        <li>Medical findings (cancer, BMI, BP)</li>
+        <li>L400 data, UW flags, policy info</li>
+        <li>Email, phone, address</li>
+      </ul>
+      <div class="warn-line">Raw PII — no masking at this stage</div>
+      <div class="warn-line">PDPA consent required before processing</div>
+    </div>
+  </div>
+
+  <!-- ── CONNECTOR I → II ── -->
+  <div class="connector">
+    <div class="flow flow-red">
+      <div class="flow-arrow-r">→</div>
+      <div class="flow-label">HTTPS POST + PII</div>
+    </div>
+    <div class="flow flow-green">
+      <div class="flow-arrow-l">←</div>
+      <div class="flow-label">SSE output stream</div>
+    </div>
+    <div class="flow flow-red" style="opacity:0.6">
+      <div class="flow-arrow-r">⇢</div>
+      <div class="flow-label">Chat bypasses masking</div>
+    </div>
+  </div>
+
+  <!-- ── ZONE II: BACKEND ── -->
+  <div class="zone zone-ii">
+    <div class="zone-header">
+      <div class="zone-badge zone-badge-ii">II</div>
+      <div>
+        <div class="zone-name">Backend API</div>
+        <div class="zone-desc">Flask :5003</div>
+      </div>
+    </div>
+
+    <div class="card card-accent-green">
+      <div class="card-label">Entry Point</div>
+      <div class="card-title">Flask App</div>
+      <div class="card-sub">app.py · 14 routes (11 /api/* + 3 pages)</div>
+      <div class="warn-line">No auth · No RBAC</div>
+      <div class="warn-line">CORS(app) wide-open · ALLOWED_ORIGINS is dead config</div>
+      <div class="mode-grid">
+        <div class="mode-chip mc-warn">
+          <div class="mc-name">Chat</div>
+          <div class="mc-path">/api/chat</div>
+          <span class="badge badge-red">Not Masked</span>
+        </div>
+        <div class="mode-chip mc-ok">
+          <div class="mc-name">Evaluate</div>
+          <div class="mc-path">/api/evaluate</div>
+          <span class="badge badge-amber">Masked</span>
+        </div>
+        <div class="mode-chip mc-ok">
+          <div class="mc-name">Draft Email</div>
+          <div class="mc-path">/api/generate-email</div>
+          <span class="badge badge-amber">Masked</span>
+        </div>
+        <div class="mode-chip mc-ok">
+          <div class="mc-name">QA Review</div>
+          <div class="mc-path">/api/qa-review</div>
+          <span class="badge badge-amber">Masked</span>
+        </div>
+        <div class="mode-chip" style="grid-column:1/-1; border-color:rgba(6,182,212,0.2); background:rgba(6,182,212,0.04);">
+          <div class="mc-name" style="color:#67e8f9">Chat Local Upload</div>
+          <div class="mc-path">/api/chat/upload-local</div>
+          <span class="badge badge-green">No PII stored</span>&nbsp;<span style="font-size:9px;color:var(--faint)">temp extract only · does not write to KB · no re-index</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-warn">
+      <div class="card-label">Privacy</div>
+      <div class="card-title">PrivacyFilter</div>
+      <div class="card-sub">services/privacy_filter.py · partial masking only</div>
+      <ul class="card-rows">
+        <li>NRIC: S8483123I → S****123I</li>
+        <li>Email: john@x.com → j***@x.com</li>
+        <li>Phone: 98765432 → 987***32</li>
+        <li>Name → [NAME_1] token</li>
+        <li>Address → [MASKED_ADDRESS (postcode:xxx)]</li>
+      </ul>
+      <div class="warn-line">Chat mode bypasses this entirely</div>
+      <div class="warn-line">NRIC tail, email domain, phone edges still leak to Anthropic</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+      <div class="card card-accent-green" style="margin-bottom:0">
+        <div class="card-label">Rules</div>
+        <div class="card-title">Rules Engine</div>
+        <div class="card-sub">services/rules_engine.py</div>
+        <ul class="card-rows">
+          <li>30+ rules — JSON-driven</li>
+          <li>step_id traceable</li>
+          <li>PASS / FAIL / HUMAN-Review</li>
+          <li>QnB · EzSub · Hardcopy gates</li>
+        </ul>
+      </div>
+      <div class="card card-accent-green" style="margin-bottom:0">
+        <div class="card-label">Email</div>
+        <div class="card-title">Email Renderer</div>
+        <div class="card-sub">inside claude_service.py *</div>
+        <ul class="card-rows">
+          <li>Python templates</li>
+          <li>Decline / Postpone / CO</li>
+          <li>Bypasses RLHF refusal</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card card-accent-green">
+      <div class="card-label">Orchestrator</div>
+      <div class="card-title">Claude Service</div>
+      <div class="card-sub">services/claude_service.py · ~1,015 lines</div>
+      <ul class="card-rows">
+        <li>Load KB → call RAG → build prompt → call LLM</li>
+        <li>Independent system_prompt per mode</li>
+        <li>SSE streaming output to browser</li>
+      </ul>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+      <div class="card card-accent-amber" style="margin-bottom:0">
+        <div class="card-label">Q&amp;A Log</div>
+        <div class="card-title">qa_log.jsonl</div>
+        <div class="card-sub">logs/ · append-only · learning loop</div>
+        <ul class="card-rows">
+          <li>Written by claude_service.py</li>
+          <li>q[:500] + r[:300] truncated</li>
+          <li>Read via /api/logs</li>
+        </ul>
+        <div class="warn-line">Chat queries written un-masked</div>
+        <div class="warn-line">Permanent — no retention policy</div>
+      </div>
+      <div class="card card-accent-amber" style="margin-bottom:0">
+        <div class="card-label">Compliance Audit</div>
+        <div class="card-title">audit_log.jsonl</div>
+        <div class="card-sub">logs/ · append-only · every API request</div>
+        <ul class="card-rows">
+          <li>Written by audit_log.py</li>
+          <li>request_id, timestamp, mode</li>
+          <li>decision, rule/SOP/KB versions</li>
+          <li>Read via /api/audit-logs</li>
+        </ul>
+        <div class="good-line">Input ref is truncated / non-PII</div>
+      </div>
+    </div>
+    <div class="card card-accent-amber" style="margin-bottom:0">
+      <div class="card-label">Logs</div>
+      <div class="card-title">App Logs</div>
+      <div class="card-sub">stdout / log file</div>
+      <ul class="card-rows">
+        <li>Debug output from logger.info</li>
+      </ul>
+      <div class="warn-line">May contain PII from request context</div>
+    </div>
+  </div>
+
+  <!-- ── CONNECTOR II → III ── -->
+  <div class="connector">
+    <div class="flow flow-violet">
+      <div class="flow-arrow-r">→</div>
+      <div class="flow-label">Query KB</div>
+    </div>
+    <div class="flow flow-violet" style="opacity:0.7">
+      <div class="flow-arrow-r">→</div>
+      <div class="flow-label">Build prompt</div>
+    </div>
+    <div class="flow flow-green">
+      <div class="flow-arrow-l">←</div>
+      <div class="flow-label">SSE tokens</div>
+    </div>
+  </div>
+
+  <!-- ── ZONE III: AI/ML ── -->
+  <div class="zone zone-iii">
+    <div class="zone-header">
+      <div class="zone-badge zone-badge-iii">III</div>
+      <div>
+        <div class="zone-name">AI / ML</div>
+        <div class="zone-desc">Processing Layer</div>
+      </div>
+    </div>
+
+    <div class="card card-accent-violet">
+      <div class="card-label">Retrieval</div>
+      <div class="card-title">RAG Service</div>
+      <div class="card-sub">services/rag_service.py · ~668 lines</div>
+      <ul class="card-rows">
+        <li>Chunks: 1,500 chars / 200 overlap</li>
+        <li>Vector retrieval top-k</li>
+        <li>Injects KB context into system_prompt</li>
+        <li>Manifest-based incremental re-indexing</li>
+      </ul>
+    </div>
+
+    <div class="card card-accent-violet">
+      <div class="card-label">Embedding</div>
+      <div class="card-title">Embedding Model</div>
+      <div class="card-sub">all-MiniLM-L6-v2 · local CPU · offline</div>
+      <ul class="card-rows">
+        <li>HuggingFace sentence-transformers</li>
+        <li>384-dimensional vectors</li>
+      </ul>
+      <div class="good-line">Offline inference — no network after first load</div>
+    </div>
+
+    <div class="card card-accent-amber">
+      <div class="card-label">Vector Store</div>
+      <div class="card-title">ChromaDB</div>
+      <div class="card-sub">Local SQLite · chroma_db/</div>
+      <ul class="card-rows">
+        <li>KB chunks + embeddings</li>
+        <li>Rebuild needed after KB edits</li>
+      </ul>
+      <div class="good-line">Contains no customer PII</div>
+    </div>
+
+    <div class="card card-accent-cyan">
+      <div class="card-label">Sources</div>
+      <div class="card-title">Knowledge Base</div>
+      <div class="card-sub">knowledge_base/ · 28 files</div>
+      <ul class="card-rows">
+        <li>sop_rules.json (rules engine config)</li>
+        <li>sop_nbig_stp_001.txt (main SOP)</li>
+        <li>ref_email_communication_rules.txt</li>
+        <li>ref_*.txt (20+ reference docs)</li>
+        <li>test_cases_*.csv</li>
+      </ul>
+      <div class="good-line">Business rules only — no customer PII</div>
+    </div>
+
+    <div class="card card-accent-violet">
+      <div class="card-label">Builder</div>
+      <div class="card-title">Prompt Builder</div>
+      <div class="card-sub">claude_service._build_*_prompt</div>
+      <ul class="card-rows">
+        <li>system_prompt: KB + rules context</li>
+        <li>user_prompt: masked case + template</li>
+      </ul>
+      <div class="warn-line">Medical descriptions included — LLM requires them</div>
+    </div>
+  </div>
+
+  <!-- ── CONNECTOR III → IV ── -->
+  <div class="connector">
+    <div class="flow flow-red">
+      <div class="flow-arrow-r">→</div>
+      <div class="flow-label">HTTPS masked prompt</div>
+    </div>
+    <div class="flow flow-green">
+      <div class="flow-arrow-l">←</div>
+      <div class="flow-label">SSE token stream</div>
+    </div>
+    <div class="flow flow-blue" style="opacity:0.5">
+      <div class="flow-arrow-r">⇢</div>
+      <div class="flow-label">First-time model download</div>
+    </div>
+  </div>
+
+  <!-- ── ZONE IV: EXTERNAL ── -->
+  <div class="zone zone-iv">
+    <div class="zone-header">
+      <div class="zone-badge zone-badge-iv">IV</div>
+      <div>
+        <div class="zone-name">External</div>
+        <div class="zone-desc">Internet · Third-party</div>
+      </div>
+    </div>
+
+    <div class="card card-accent-rose" style="border-color:rgba(244,63,94,0.25); background:rgba(244,63,94,0.04);">
+      <div class="card-label">LLM API</div>
+      <div class="card-title">Anthropic Claude API</div>
+      <div class="card-sub">api.anthropic.com · HTTPS</div>
+      <ul class="card-rows">
+        <li>Model: claude-sonnet-4-6 (code-verified)</li>
+        <li style="color:var(--faint)">Region US / 30-day logs / no training — vendor policy claim</li>
+        <li>Input: partially masked prompt</li>
+        <li style="color:#fbbf24">NRIC tail · email domain · medical terms intact</li>
+        <li>Output: AI text (SSE streaming)</li>
+      </ul>
+      <div class="warn-line">Cross-border data transfer</div>
+      <div class="warn-line">No DPA or ZDR documentation in project</div>
+    </div>
+
+    <div class="card card-accent-rose">
+      <div class="card-label">Model Download</div>
+      <div class="card-title">HuggingFace Hub</div>
+      <div class="card-sub">huggingface.co · first-time only · ~80 MB</div>
+      <div class="good-line">No business data uploaded</div>
+      <div class="warn-line">Recommend: bundle model offline before production</div>
+    </div>
+
+    <div class="card card-dashed">
+      <div class="card-label" style="color:var(--faint)">Not Yet Implemented</div>
+      <div class="card-title" style="color:var(--faint)">Future Integrations</div>
+      <ul class="card-rows" style="color:var(--faint); margin-top:6px">
+        <li>Power Automate (mentioned in KB)</li>
+        <li>Email Gateway — speculative</li>
+        <li>Policy Admin System — speculative</li>
+        <li>Microsoft Teams — speculative</li>
+      </ul>
+      <div style="margin-top:6px"><span class="badge badge-gray">Deployment placeholder only</span></div>
+    </div>
+  </div>
+
+</div><!-- end .diagram -->
+
+<!-- ══════════ PII LIFECYCLE ══════════ -->
+<div class="section-title">PII Lifecycle — 5 Stages</div>
+<div class="lifecycle">
+  <div class="stage stage-collect">
+    <div class="stage-num">Stage 1</div>
+    <div class="stage-name">Collect</div>
+    <ul class="stage-body">
+      <li>NRIC, name, DOB</li>
+      <li>Sex, nationality</li>
+      <li>Medical findings</li>
+      <li>Email, phone</li>
+      <li>Policy / client no.</li>
+      <li>L400 data, UW flags</li>
+    </ul>
+    <div class="warn-line" style="margin-top:8px">Class: Sensitive PII</div>
+    <div class="warn-line">Channel: HTTPS POST</div>
+    <div class="warn-line">PDPA consent required</div>
+  </div>
+
+  <div class="stage stage-mask">
+    <div class="stage-num">Stage 2</div>
+    <div class="stage-name">Partial Masking</div>
+    <ul class="stage-body">
+      <li>NRIC → S****123I</li>
+      <li>Email → j***@x.com</li>
+      <li>Phone → 987***32</li>
+      <li>Name → [NAME_1]</li>
+      <li>Address → [MASKED_ADDR]</li>
+      <li style="color:#fbbf24">DOB, BMI, diagnosis kept</li>
+    </ul>
+    <div class="warn-line" style="margin-top:8px">Chat bypasses this stage</div>
+    <div class="warn-line">Fragments still reach Anthropic</div>
+  </div>
+
+  <div class="stage stage-ai">
+    <div class="stage-num">Stage 3</div>
+    <div class="stage-name">AI Processing</div>
+    <ul class="stage-body">
+      <li>Embedding (local CPU)</li>
+      <li>ChromaDB local query</li>
+      <li>Rules Engine eval</li>
+    </ul>
+    <div class="warn-line" style="margin-top:8px">Anthropic API — US servers</div>
+    <ul class="stage-body">
+      <li style="color:#fbbf24">Masked prompt + medical terms</li>
+      <li style="color:#fbbf24">30-day log retention (vendor)</li>
+    </ul>
+    <div class="warn-line">Cross-border — needs DPA / ZDR</div>
+  </div>
+
+  <div class="stage stage-persist">
+    <div class="stage-num">Stage 4</div>
+    <div class="stage-name">Persist</div>
+    <ul class="stage-body">
+      <li>qa_log.jsonl — Q&amp;A learning loop</li>
+      <li>q[:500] + r[:300] truncated</li>
+      <li style="color:#fbbf24">Chat queries un-masked</li>
+      <li>audit_log.jsonl — compliance trail</li>
+      <li style="color:#34d399">Audit input ref: no raw PII</li>
+      <li style="color:#fbbf24">App logs may have PII</li>
+    </ul>
+    <div class="good-line" style="margin-top:8px">ChromaDB — KB only, no PII</div>
+    <div class="warn-line">.env API key in plaintext</div>
+    <div class="warn-line">Recommend: 7-yr retention + encrypt</div>
+  </div>
+
+  <div class="stage stage-output">
+    <div class="stage-num">Stage 5</div>
+    <div class="stage-name">Output</div>
+    <ul class="stage-body">
+      <li>Analysis + medical terms</li>
+      <li>Email draft</li>
+      <li>Decision + rationale</li>
+    </ul>
+    <div class="good-line" style="margin-top:8px">SSE streamed to browser</div>
+    <div class="good-line">step_id traceability in place</div>
+    <ul class="stage-body" style="margin-top:6px">
+      <li>AI disclaimer required</li>
+      <li>Human review required</li>
+      <li>FEAT explainability</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════ CRITICAL DATA PATHS ══════════ -->
+<div class="table-section">
+  <div class="section-title">Critical Data Paths</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Path</th><th>Source → Destination</th><th>Data Type</th><th>Class</th><th>Risk</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>P1</td><td>Browser → Flask /api/chat</td><td>Raw PII (NRIC, name, diagnosis)</td><td><span class="badge badge-red">PII</span></td><td><span class="badge badge-red">P0</span> Chat not masked</td></tr>
+        <tr><td>P2</td><td>Browser → /api/evaluate · /api/generate-email · /api/qa-review</td><td>Raw PII through PrivacyFilter</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Controlled</span></td></tr>
+        <tr><td>P3</td><td>Backend → Anthropic API</td><td>Masked prompt + medical terms</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-red">P0</span> Cross-border · no DPA</td></tr>
+        <tr><td>P4</td><td>Backend → ChromaDB (local)</td><td>KB embedding vectors</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span></td></tr>
+        <tr><td>P5a</td><td>Backend → logs/qa_log.jsonl</td><td>Truncated Q&amp;A (q[:500]+r[:300]) — written by claude_service.py</td><td><span class="badge badge-amber">Mixed</span></td><td><span class="badge badge-red">P0</span> Chat writes un-masked · permanent</td></tr>
+        <tr><td>P5b</td><td>Backend → logs/audit_log.jsonl</td><td>Compliance audit trail — request_id, mode, decision, versions — written by audit_log.py</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span> Input ref is truncated · no raw PII</td></tr>
+        <tr><td>P6</td><td>Backend → App logs</td><td>Debug info</td><td><span class="badge badge-red">PII</span></td><td><span class="badge badge-red">P0</span> Potential leak via logger.info</td></tr>
+        <tr><td>P7</td><td>Embedding → HuggingFace Hub</td><td>Model download only</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span> · offline bundling recommended</td></tr>
+        <tr><td>P8</td><td>Anthropic → Backend (SSE)</td><td>AI-generated text</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Low</span></td></tr>
+        <tr><td>P9</td><td>Backend → Browser (SSE)</td><td>Rendered output</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Low</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ PII FIELD INVENTORY ══════════ -->
+<div class="table-section">
+  <div class="section-title">Field-Level PII Inventory</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Class</th><th>PrivacyFilter Action</th><th>Sent to Anthropic</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>NRIC / national ID</td><td><span class="badge badge-red">Sensitive</span></td><td>S8483123I → S****123I (partial)</td><td><strong style="color:#fb7185">Yes — first letter + last 4 chars leak</strong></td><td>Chat mode not masked</td></tr>
+        <tr><td>Name</td><td><span class="badge badge-red">Sensitive</span></td><td>Replaced with [NAME_1] token</td><td>No (placeholder only)</td><td></td></tr>
+        <tr><td>Date of birth</td><td><span class="badge badge-amber">PII</span></td><td>Kept</td><td>Yes — used for ANB calculation</td><td></td></tr>
+        <tr><td>Sex / nationality</td><td><span class="badge badge-amber">PII</span></td><td>Kept</td><td>Yes</td><td></td></tr>
+        <tr><td>Email</td><td><span class="badge badge-red">Sensitive</span></td><td>john@x.com → j***@x.com</td><td><strong style="color:#fb7185">Yes — first char + full domain leak</strong></td><td></td></tr>
+        <tr><td>Phone</td><td><span class="badge badge-red">Sensitive</span></td><td>98765432 → 987***32</td><td><strong style="color:#fb7185">Yes — first 3 + last 2 digits leak</strong></td><td></td></tr>
+        <tr><td>Address</td><td><span class="badge badge-red">Sensitive</span></td><td>[MASKED_ADDRESS (postcode:xxx)]</td><td>No — postcode only</td><td></td></tr>
+        <tr><td>Medical findings (cancer, BMI, BP)</td><td><span class="badge badge-red">Sensitive Health</span></td><td><strong>Kept</strong></td><td><strong style="color:#fb7185">Yes</strong></td><td>LLM requires clinical context</td></tr>
+        <tr><td>Policy / contract no.</td><td><span class="badge badge-amber">Confidential</span></td><td>Kept</td><td>Yes</td><td>Business identifier</td></tr>
+        <tr><td>UW flags (sub_std, decline)</td><td><span class="badge badge-blue">Internal</span></td><td>Kept</td><td>Yes</td><td>Core rules engine input</td></tr>
+        <tr><td>L400 data</td><td><span class="badge badge-amber">PII</span></td><td>Names masked, rest kept</td><td>Partial</td><td>Used for identity matching</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ P0 RISKS ══════════ -->
+<div class="table-section">
+  <div class="section-title">P0 Risks</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Risk</th><th>Location</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-red">R-01</span> No API authentication</td><td>Zone II — Flask App header</td><td>Integrate SSO / API gateway auth</td></tr>
+        <tr><td><span class="badge badge-red">R-02</span> Chat bypasses PrivacyFilter</td><td>Zone II — Chat mode chip (red)</td><td>Apply PrivacyFilter to chat mode</td></tr>
+        <tr><td><span class="badge badge-red">R-03</span> API key in plaintext .env</td><td>Prompt Builder → Anthropic connector</td><td>Move to secrets vault (e.g. AWS Secrets Manager)</td></tr>
+        <tr><td><span class="badge badge-red">R-04</span> Cross-border transfer without DPA</td><td>Zone IV — Anthropic API card</td><td>Sign DPA with Anthropic · apply ZDR if available</td></tr>
+        <tr><td><span class="badge badge-red">R-05</span> qa_log permanent with un-masked chat queries</td><td>Zone II — qa_log.jsonl card</td><td>Apply PrivacyFilter before log_qa() in chat_stream · set retention policy on both log files</td></tr>
+        <tr><td><span class="badge badge-red">R-06</span> App logs may contain PII</td><td>Zone II — App Logs card</td><td>Add log-masking filter to logger handlers</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ DISCREPANCY NOTE ══════════ -->
+<div class="note-bar">
+  <strong>* Code Discrepancy Note</strong> — The original diagram referenced <code>email_disclosure_renderer.py</code> as a standalone module. This file does not exist in the codebase. Email rendering logic lives inside <code>backend/services/claude_service.py</code>. The Email Renderer card above reflects the corrected location.
+</div>
+
+</body>
+</html>
