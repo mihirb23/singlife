@@ -543,7 +543,7 @@ async function sendMessage(text) {
       endpoint = `${API_BASE}/api/evaluate`;
       payload = { caseData, messages: conv.messages.slice(0, -1) };
     } else if (currentMode === 'email') {
-      let emailData = { decision_type: 'Decline', customer_name: '[Customer Name]', outcome_summary: userText };
+      let emailData = { decision_type: 'Review Required', customer_name: '[Customer Name]', outcome_summary: userText };
       try { emailData = JSON.parse(userText); } catch {}
       endpoint = `${API_BASE}/api/generate-email`;
       payload = { emailData, messages: conv.messages.slice(0, -1) };
@@ -680,16 +680,28 @@ function extractEvalDecision(text) {
 
 function draftEmailFromEval(evalData) {
   // map evaluation decision to email decision type and tone
-  const decisionMap = {
-    'Standard': { type: 'Approval', tone: 'Supportive', summary: 'Your application has been approved.' },
-    'StandardWithFurtherRequirements': { type: 'Pending', tone: 'Reassuring', summary: 'Your application requires additional information before we can proceed.' },
-    'ReferToUW': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' },
-    'Refer UW': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' },
-    'TriggerGNS': { type: 'Postpone', tone: 'Reassuring', summary: 'Your application is undergoing additional compliance review.' },
-    'Withdrawal': { type: 'Withdrawal', tone: 'Empathetic', summary: 'We have received and processed your withdrawal request.' },
-  };
+  // normalize decision string — handles all variations from rules engine and Claude output
+  const norm = (evalData.decision || '').toLowerCase().replace(/[\s_-]+/g, '');
 
-  const mapped = decisionMap[evalData.decision] || { type: 'Decline', tone: 'Empathetic', summary: 'Unable to offer coverage at this time.' };
+  let mapped;
+  if (norm === 'standard' || norm === 'approve') {
+    mapped = { type: 'Approval', tone: 'Supportive', summary: 'Your application has been approved.' };
+  } else if (norm.includes('furtherreq') || norm === 'block' || norm === 'pending') {
+    mapped = { type: 'Pending', tone: 'Reassuring', summary: 'Your application requires additional information before we can proceed.' };
+  } else if (norm.includes('refer') || norm.includes('uw') || norm.includes('underwrit')) {
+    mapped = { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' };
+  } else if (norm.includes('postpone')) {
+    mapped = { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review before we can proceed.' };
+  } else if (norm.includes('gns') || norm.includes('compliance')) {
+    mapped = { type: 'Postpone', tone: 'Reassuring', summary: 'Your application is undergoing additional compliance review.' };
+  } else if (norm.includes('withdraw')) {
+    mapped = { type: 'Withdrawal', tone: 'Empathetic', summary: 'We have received and processed your withdrawal request.' };
+  } else if (norm.includes('decline')) {
+    mapped = { type: 'Decline', tone: 'Empathetic', summary: 'Unable to offer coverage at this time.' };
+  } else {
+    // unknown decision — use original text, never default to Decline
+    mapped = { type: evalData.decision || 'Review Required', tone: 'Reassuring', summary: 'Your application is currently under review.' };
+  }
 
   const emailPayload = {
     decision_type: mapped.type,

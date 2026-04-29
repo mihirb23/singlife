@@ -750,10 +750,10 @@ class InsuranceAssistant:
             yield "**Configuration Error:** API key not set."
             return
 
-        decision_type = email_data.get('decision_type', 'Decline')
+        decision_type = email_data.get('decision_type', 'Review Required')
         customer_name = email_data.get('customer_name', '[Customer Name]')
-        outcome_summary = email_data.get('outcome_summary', 'Unable to offer coverage at this time')
-        tone = email_data.get('tone_required', 'Empathetic')
+        outcome_summary = email_data.get('outcome_summary', 'Your application is currently under review.')
+        tone = email_data.get('tone_required', 'Reassuring')
 
         email_query = f"email communication rules {decision_type} customer empathetic compliant"
         retrieval_payload = self._prepare_retrieval_context(email_query, top_k=10, prefer_full_named_file=False)
