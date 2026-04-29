@@ -18,12 +18,31 @@ load_dotenv(dotenv_path=Path(__file__).parent / '.env', override=True)
 from services.claude_service import InsuranceAssistant, KB_DIR
 from services.audit_log import log_audit, get_audit_logs, check_audit_auth
 from services.rag_service import extract_text
+from services.privacy_filter import PrivacyFilter
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class PIILogFilter(logging.Filter):
+    def __init__(self):
+        super().__init__()
+        self._pf = PrivacyFilter()
+
+    def filter(self, record):
+        record.msg = self._pf.sanitize_text(str(record.msg))
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {k: self._pf.sanitize_text(str(v)) for k, v in record.args.items()}
+            elif isinstance(record.args, tuple):
+                record.args = tuple(self._pf.sanitize_text(str(a)) for a in record.args)
+        return True
+
+
+logging.root.addFilter(PIILogFilter())
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
