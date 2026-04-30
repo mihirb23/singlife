@@ -195,16 +195,19 @@ function renderTable(logs) {
     const status = log.status || 'unknown';
     const error = log.error;
 
+    // XSS hardening: every server-controlled string goes through escHtml before innerHTML.
+    // case_id, input_reference keys, and output_result values can be attacker-controlled
+    // via the request body, so we cannot trust any of them.
     return `<tr>
-      <td class="mono">${ts}</td>
-      <td class="mono">${reqId}</td>
-      <td><span class="badge badge-mode">${mode}</span></td>
-      <td class="mono">${caseId}</td>
+      <td class="mono">${escHtml(ts)}</td>
+      <td class="mono">${escHtml(reqId)}</td>
+      <td><span class="badge badge-mode">${escHtml(mode)}</span></td>
+      <td class="mono">${escHtml(caseId)}</td>
       <td class="input-ref" title="${escHtml(JSON.stringify(log.input_reference || {}))}">${input}</td>
       <td>${output}</td>
       <td class="reasoning" title="${escHtml(reasoning)}">${escHtml(reasoning)}</td>
       <td>${versions}</td>
-      <td><span class="badge ${status === 'success' ? 'badge-success' : 'badge-error'}">${status}</span>
+      <td><span class="badge ${status === 'success' ? 'badge-success' : 'badge-error'}">${escHtml(status)}</span>
           ${error ? `<br><span class="mono" style="color:var(--red);font-size:0.7rem;">${escHtml(error)}</span>` : ''}</td>
     </tr>`;
   }).join('');
@@ -212,9 +215,10 @@ function renderTable(logs) {
 
 function formatObj(obj) {
   if (!obj || !Object.keys(obj).length) return '—';
+  // both keys and values get escaped — keys are attacker-controlled (request body)
   return Object.entries(obj)
     .filter(([k,v]) => v !== null && v !== undefined && v !== '')
-    .map(([k,v]) => `<strong>${k}:</strong> ${escHtml(String(v))}`)
+    .map(([k,v]) => `<strong>${escHtml(k)}:</strong> ${escHtml(String(v))}`)
     .join('<br>');
 }
 
@@ -224,21 +228,22 @@ function formatOutput(obj, mode) {
     const d = obj.decision || '—';
     const t = obj.trigger || '—';
     const f = (obj.steps_failed || []).join(', ') || 'none';
-    return `<strong>${d}</strong><br>trigger: ${t}<br>failed: ${f}`;
+    return `<strong>${escHtml(d)}</strong><br>trigger: ${escHtml(t)}<br>failed: ${escHtml(f)}`;
   }
   if (mode === 'qa_review') {
-    return `<strong>${obj.risk_level || '—'}</strong> (score: ${obj.complexity_score || '—'})<br>${obj.recommendation || ''}`;
+    return `<strong>${escHtml(obj.risk_level || '—')}</strong> (score: ${escHtml(String(obj.complexity_score || '—'))})<br>${escHtml(obj.recommendation || '')}`;
   }
   return Object.entries(obj)
-    .map(([k,v]) => `${k}: ${escHtml(String(v))}`)
+    .map(([k,v]) => `${escHtml(k)}: ${escHtml(String(v))}`)
     .join('<br>');
 }
 
 function formatVersions(v) {
   if (!v) return '—';
   const parts = [];
-  if (v.sop_id) parts.push(`<span class="version-tag">${v.sop_id}</span>`);
-  if (v.model) parts.push(`<span class="version-tag">${v.model}</span>`);
+  // versions come from server config files but escape anyway — defense in depth
+  if (v.sop_id) parts.push(`<span class="version-tag">${escHtml(v.sop_id)}</span>`);
+  if (v.model) parts.push(`<span class="version-tag">${escHtml(v.model)}</span>`);
   return parts.join(' ') || '—';
 }
 

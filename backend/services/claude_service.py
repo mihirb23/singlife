@@ -8,9 +8,10 @@ import os
 import json
 import logging
 import re
+import fcntl
 from pathlib import Path
 from typing import Iterator, List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ from services.rules_engine import evaluate_case
 from services.rag_service import VectorStore, SUPPORTED_EXTENSIONS, extract_text
 from services.privacy_filter import PrivacyFilter
 
-load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=True)
+load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=False)
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,12 @@ KB_DIR = Path(__file__).parent.parent.parent / 'knowledge_base'
 LOG_DIR = Path(__file__).parent.parent.parent / 'logs'
 
 
-MAX_CONVERSATION_MESSAGES = 20  # keep last N messages to avoid blowing context window
-MAX_MESSAGE_CHARS = 4000  # truncate individual messages longer than this
-MAX_FULL_SOURCE_CHARS = 100000
-MAX_CONTEXT_CHARS = 140000
-MAX_SOURCES_PER_RESPONSE = 3
+MAX_CONVERSATION_MESSAGES = int(os.getenv('MAX_CONVERSATION_MESSAGES', '20'))
+MAX_MESSAGE_CHARS = int(os.getenv('MAX_MESSAGE_CHARS', '4000'))
+MAX_FULL_SOURCE_CHARS = int(os.getenv('MAX_FULL_SOURCE_CHARS', '100000'))
+MAX_CONTEXT_CHARS = int(os.getenv('MAX_CONTEXT_CHARS', '140000'))
+MAX_SOURCES_PER_RESPONSE = int(os.getenv('MAX_SOURCES_PER_RESPONSE', '3'))
+MAX_QA_LOG_LIMIT = int(os.getenv('MAX_QA_LOG_LIMIT', '10000'))
 FILE_MATCH_CONFIDENCE_MIN = 0.72
 FILE_MATCH_TIE_MARGIN = 0.03
 EXPANDED_NEIGHBOR_WINDOW = 1
@@ -163,11 +165,13 @@ Format your response as:
 
 
 def log_qa(question: str, response: str, mode: str = 'chat', retrieval_meta: Optional[Dict] = None):
-    """save each Q&A pair for the learning loop"""
+    """Save each Q&A pair for the learning loop.
+    Uses UTC timestamps (consistent with audit_log) and fcntl locking to prevent
+    interleaved writes from concurrent gunicorn workers."""
     LOG_DIR.mkdir(exist_ok=True)
     log_file = LOG_DIR / 'qa_log.jsonl'
     entry = {
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'mode': mode,
         'question': question[:500],
         'response_preview': response[:300],
@@ -177,7 +181,12 @@ def log_qa(question: str, response: str, mode: str = 'chat', retrieval_meta: Opt
         entry['retrieval'] = retrieval_meta
     try:
         with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry) + '\n')
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                f.write(json.dumps(entry) + '\n')
+                f.flush()
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except Exception as e:
         logger.error(f"Failed to log Q&A: {e}")
 
@@ -188,7 +197,14 @@ class InsuranceAssistant:
     def __init__(self):
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
         self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-6')
-        self.max_tokens = int(os.getenv('CLAUDE_MAX_TOKENS', '8192'))
+        # tolerate bad CLAUDE_MAX_TOKENS env values instead of crashing at startup
+        try:
+            self.max_tokens = int(os.getenv('CLAUDE_MAX_TOKENS', '8192'))
+            if self.max_tokens <= 0:
+                raise ValueError("must be positive")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Invalid CLAUDE_MAX_TOKENS env value, defaulting to 8192: {e}")
+            self.max_tokens = 8192
         self.documents = load_knowledge_base()
 
         # init RAG vector store — always runs incremental index to pick up
@@ -681,8 +697,15 @@ class InsuranceAssistant:
             if mask_log:
                 logger.info(f"Privacy filter masked {len(mask_log)} PII items before LLM call")
 
-            # step 3: get relevant SOP context via RAG — include failing steps for better retrieval
-            failed_steps = ' '.join(s.get('step_id', '') for s in rules_result.get('steps', []) if s.get('status') == 'Fail')
+            # step 3: get relevant SOP context via RAG — include failing steps for better retrieval.
+            # bug fix: read from 'sop_rule_evaluation' (the actual key) not 'steps'.
+            # also include any non-Pass status (Refer UW / Refer Ops / Manual Review) for richer queries.
+            non_pass = [
+                s.get('step_id', '')
+                for s in rules_result.get('sop_rule_evaluation', [])
+                if s.get('status') and s.get('status') != 'Pass' and s.get('status') != 'Skip'
+            ]
+            failed_steps = ' '.join(filter(None, non_pass))
             query = f"SOP evaluation {rules_result.get('channel', '')} {rules_result.get('cnt_type', '')} {failed_steps} case checks"
             retrieval_payload = self._prepare_retrieval_context(query, top_k=10, prefer_full_named_file=False)
             self._log_retrieval_telemetry(query, retrieval_payload)
@@ -716,7 +739,9 @@ class InsuranceAssistant:
             # rules engine couldn't parse it — fall back to full LLM evaluation
             pf = PrivacyFilter()
             sanitized_case = pf.sanitize_for_llm(case_data)
-            fallback_query = str(case_data)  # use original for local RAG retrieval only
+            # use SANITIZED case for the fallback RAG query — the query string is logged
+            # via _log_retrieval_telemetry, so passing raw case_data would leak PII
+            fallback_query = str(sanitized_case)
             retrieval_payload = self._prepare_retrieval_context(fallback_query, top_k=10, prefer_full_named_file=False)
             self._log_retrieval_telemetry(fallback_query, retrieval_payload)
             rag_context = retrieval_payload.get("context_text", "")
@@ -742,8 +767,8 @@ class InsuranceAssistant:
                     full_response += text
                     yield text
 
-            masked_log = PrivacyFilter().sanitize_for_llm(case_data)
-            user_msg = str(masked_log)[:500]
+            # reuse the already-populated `pf` so its mask log is consistent across this request
+            user_msg = str(pf.sanitize_for_llm(case_data))[:500]
             log_qa(user_msg, full_response, 'evaluate', retrieval_meta=retrieval_payload)
 
         except Exception as e:
@@ -844,19 +869,40 @@ class InsuranceAssistant:
 
     def _calculate_qa_score(self, qa_data: dict) -> dict:
         """Calculate QA complexity score — all thresholds, points, and risk levels
-        read from qa_scoring_rules.json. Zero hardcoded business logic."""
+        read from qa_scoring_rules.json. Zero hardcoded business logic.
+
+        Accepts both flat and nested payloads:
+          flat:   {"icd_cnt": 4, "decision": "Postpone", ...}
+          nested: {"case_metadata": {"decision": "Postpone"},
+                   "qa_indicators": {"icd_cnt": 4, ...}}
+        """
         config = self._load_qa_scoring_config()
         if not config:
             return {"error": "QA scoring config not found", "complexity_score": 0, "risk_level": "Unknown"}
 
-        icd_cnt = qa_data.get('icd_cnt', len(qa_data.get('icd_codes', [])))
-        decision = qa_data.get('decision', '')
+        # flatten nested payload (per AI_Brain_QA_Sample_*.json spec format)
+        # falls back to top-level for backward compatibility
+        indicators = qa_data.get('qa_indicators', {})
+        metadata = qa_data.get('case_metadata', {})
+        def g(key, default=None):
+            if key in qa_data:
+                return qa_data[key]
+            if key in indicators:
+                return indicators[key]
+            if key in metadata:
+                return metadata[key]
+            return default
+
+        icd_codes = g('icd_codes', [])
+        icd_cnt = g('icd_cnt', len(icd_codes) if icd_codes else 0)
+        decision = g('decision', '')
 
         # auto-detect sensitive ICD from config's sensitive code list
-        sensitive = qa_data.get('sensitive_icd_flag', False)
-        if not sensitive and qa_data.get('icd_codes'):
+        sensitive = g('sensitive_icd_flag', False)
+        if not sensitive and icd_codes:
             sensitive_codes = set(config.get('sensitive_icd_codes', []))
-            sensitive = any(c in sensitive_codes for c in qa_data['icd_codes'])
+            # filter out None / non-string entries to avoid TypeError on `c in set`
+            sensitive = any(c in sensitive_codes for c in icd_codes if isinstance(c, str))
 
         breakdown = []
         score = 0
@@ -868,7 +914,7 @@ class InsuranceAssistant:
             ind_type = indicator['type']
 
             if ind_type == 'range':
-                value = qa_data.get(input_field, 0)
+                value = g(input_field, 0)
                 if input_field == 'icd_cnt':
                     value = icd_cnt
                 matched = False
@@ -884,7 +930,7 @@ class InsuranceAssistant:
                     breakdown.append((label, 0, str(value)))
 
             elif ind_type == 'boolean':
-                value = qa_data.get(input_field, False)
+                value = g(input_field, False)
                 if input_field == 'sensitive_icd_flag':
                     value = sensitive
                 if value:
@@ -893,7 +939,7 @@ class InsuranceAssistant:
                     breakdown.append((label, pts, indicator['detail_if_true']))
 
             elif ind_type == 'threshold':
-                value = qa_data.get(input_field, 0)
+                value = g(input_field, 0)
                 threshold = indicator['threshold']
                 op = indicator['operator']
                 exceeded = False
@@ -1006,17 +1052,29 @@ class InsuranceAssistant:
             yield f"\n\n**Error:** {str(e)}"
 
     def get_qa_logs(self, limit: int = 50) -> List[Dict]:
-        """read the jsonl log and return last N entries"""
+        """Read the jsonl log and return last N entries.
+        Caps limit at MAX_QA_LOG_LIMIT to protect memory.
+        Skips corrupt JSON lines (same robustness as audit_log P0-2 fix)."""
+        # cap limit so a hostile ?limit=99999999 doesn't OOM the server
+        limit = max(1, min(int(limit) if limit else 50, MAX_QA_LOG_LIMIT))
         log_file = LOG_DIR / 'qa_log.jsonl'
         if not log_file.exists():
             return []
         entries = []
+        skipped = 0
         try:
             with open(log_file, 'r', encoding='utf-8') as f:
-                for line in f:
+                for line_num, line in enumerate(f, 1):
                     line = line.strip()
-                    if line:
+                    if not line:
+                        continue
+                    try:
                         entries.append(json.loads(line))
+                    except json.JSONDecodeError as e:
+                        skipped += 1
+                        logger.warning(f"Skipping corrupt qa_log line {line_num}: {e}")
         except Exception as e:
             logger.error(f"Failed to read Q&A logs: {e}")
+        if skipped:
+            logger.info(f"qa_log read: {len(entries)} valid, {skipped} corrupt skipped")
         return entries[-limit:]

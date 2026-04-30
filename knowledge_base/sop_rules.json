@@ -252,6 +252,20 @@
         "Select Decision: Underwriting Review?"
       ]
     },
+    "ReferToOps": {
+      "condition": "Name sequence mismatch, NRIC search anomaly, or duplicate client requiring Ops resolution (per May's clarifications #4 and #9)",
+      "decision_label": "Refer Ops",
+      "workflow_action": "Ops Review",
+      "ops_outcome_detail": "Refer case to Ops for client-record investigation: name sequence (race-based), NRIC verification, or duplicate client merge/create.",
+      "human_review": true,
+      "dotsphere_steps": [
+        "Go to L400 Client Records screen",
+        "For name mismatch: adjust name sequence per race (Chinese: surname+given, non-Chinese: given+surname) so full-name string matches NRIC",
+        "For NRIC anomaly (0 or >1 results): investigate existing policies tagged to different client records; merge if duplicate or create new client_id if none",
+        "Go to DotSphere",
+        "Select Decision: Refer to Ops"
+      ]
+    },
     "TriggerGNS": {
       "condition": "C09 follow-up code outstanding or compliance hit",
       "decision_label": "Trigger GNS",
@@ -290,7 +304,13 @@
         "condition": "any_step_has_impact",
         "impact_value": "Refer UW",
         "also_check_status": "Refer UW",
-        "additional_impacts": ["RCS Required", "Refer Ops"]
+        "additional_impacts": ["RCS Required"]
+      },
+      {
+        "key": "ReferToOps",
+        "condition": "any_step_has_impact",
+        "impact_value": "Refer Ops",
+        "also_check_status": "Refer Ops"
       },
       {
         "key": "TriggerGNS",
@@ -313,6 +333,7 @@
       "StandardWithFurtherRequirements": "Yes",
       "Withdrawal": "Yes",
       "ReferToUW": "No",
+      "ReferToOps": "No",
       "TriggerGNS": "No"
     }
   },

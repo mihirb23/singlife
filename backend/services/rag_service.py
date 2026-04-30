@@ -6,8 +6,10 @@
 import hashlib
 import json
 import logging
+import os
 import re
-from datetime import datetime
+import tempfile
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -41,6 +43,11 @@ PARSER_VERSIONS = {
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
     """Split text into overlapping chunks so boundary-spanning rules
     still get captured in at least one chunk."""
+    # guard against pathological config — overlap >= chunk_size would loop forever
+    if chunk_size <= 0:
+        return [text] if text else []
+    if overlap >= chunk_size:
+        overlap = max(0, chunk_size // 4)
     chunks = []
     start = 0
     while start < len(text):
@@ -151,8 +158,25 @@ def load_manifest() -> dict:
 
 
 def save_manifest(manifest: dict):
+    """Atomic manifest write — writes to tempfile in same dir, then os.replace().
+    Stops half-written manifests from torpedoing the next startup if the process
+    dies mid-write."""
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    payload = json.dumps(manifest, indent=2)
+    fd, tmp_path = tempfile.mkstemp(prefix='manifest_', suffix='.tmp', dir=str(CHROMA_DIR))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, MANIFEST_PATH)
+    except Exception:
+        # don't leave a stale temp file behind
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def scan_kb_files() -> Dict[str, Path]:
@@ -223,6 +247,10 @@ class VectorStore:
     def __init__(self):
         self.client = None
         self.collection = None
+        # indexing lock — stops two workers/threads from re-indexing simultaneously
+        # (would cause duplicate embeddings, doubled chunk counts, manifest race)
+        import threading as _threading
+        self._index_lock = _threading.Lock()
         self._init_store()
 
     def _init_store(self):
@@ -250,11 +278,25 @@ class VectorStore:
     # ------------------------------------------------------------------
 
     def index_documents(self):
-        """Scan KB, diff against manifest, embed only what changed."""
+        """Scan KB, diff against manifest, embed only what changed.
+        Holds an in-process lock so two threads/workers can't double-index."""
         if not self.collection:
             logger.error("Collection not available — can't index")
             return
 
+        # non-blocking would be nicer but at startup we want the second caller to
+        # just wait for the first to finish (otherwise the second one starts before
+        # the manifest is saved and re-embeds everything as "new")
+        if not self._index_lock.acquire(timeout=300):
+            logger.error("Could not acquire index lock within 5 min — skipping")
+            return
+        try:
+            self._index_documents_locked()
+        finally:
+            self._index_lock.release()
+
+    def _index_documents_locked(self):
+        """Inner indexing logic — caller must hold self._index_lock."""
         fresh_manifest = not MANIFEST_PATH.exists()
         manifest = load_manifest()
 
@@ -319,7 +361,10 @@ class VectorStore:
                     continue
 
                 chunks = chunk_text(text)
-                chunk_ids = [f"{path.stem}_{hash_short}_{i}" for i in range(len(chunks))]
+                # include extension (without dot) in chunk ID so files with the same
+                # stem but different extensions (e.g. test.txt + test.pdf) don't collide
+                ext_token = ext.lstrip('.') or 'file'
+                chunk_ids = [f"{path.stem}_{ext_token}_{hash_short}_{i}" for i in range(len(chunks))]
                 metadatas = [
                     {"source": name, "chunk_index": i, "total_chunks": len(chunks)}
                     for i in range(len(chunks))
@@ -360,14 +405,20 @@ class VectorStore:
             metadata_row = metadata_rows[0] if metadata_rows else []
             if metadata_row is None:
                 metadata_row = []
-            for i, doc in enumerate(results["documents"][0]):
+            # guard against unexpected response shapes ([] or [[]] etc.)
+            documents = results.get("documents") or []
+            if not documents or not documents[0]:
+                return []
+            distances = results.get("distances") or []
+            distance_row = distances[0] if distances else []
+            for i, doc in enumerate(documents[0]):
                 metadata = metadata_row[i] if i < len(metadata_row) and metadata_row[i] else {}
                 chunks.append({
                     "text": doc,
                     "source": metadata.get("source"),
                     "chunk_index": metadata.get("chunk_index"),
                     "total_chunks": metadata.get("total_chunks"),
-                    "score": results["distances"][0][i] if results["distances"] else None,
+                    "score": distance_row[i] if i < len(distance_row) else None,
                 })
             if priority_sources:
                 wanted = {s.lower() for s in priority_sources}
@@ -600,15 +651,38 @@ class VectorStore:
         if best_score is not None and best_score > 1.15:
             sufficient = False
             reason = "weak_similarity_scores"
-        elif unique_sources > max(3, top_k // 2):
+        # only trigger fragmentation fallback when retrieval is BOTH spread and weak.
+        # 5 sources for top_k=8 is normal; the LLM can reason across them. Only fall back
+        # when nearly every chunk is from a different source AND scores are mediocre.
+        elif unique_sources >= max(6, top_k) and (best_score is None or best_score > 0.85):
             sufficient = False
             reason = "over_fragmented_sources"
         elif not sufficient:
             reason = "too_few_matches"
 
-        grouped_by_source = {}
+        # rank sources by best (lowest) retrieval score so sources[0] is the most relevant.
+        # without this, the fallback path picks the alphabetically-first source, which can
+        # leak unrelated docs into a single-source full-load response.
+        source_best_score: Dict[str, float] = {}
+        for hit in matched:
+            src = hit.get("source")
+            sc = hit.get("score")
+            if src is None or sc is None:
+                continue
+            if src not in source_best_score or sc < source_best_score[src]:
+                source_best_score[src] = sc
+        ranked_sources = sorted(source_best_score.keys(), key=lambda s: source_best_score[s])
+
+        grouped_by_source: Dict[str, List[dict]] = {}
+        for src in ranked_sources:
+            grouped_by_source[src] = [c for c in expanded_chunks if c.get("source") == src]
+        # any source present in expanded_chunks but missing a retrieval score (rare edge case)
         for chunk in expanded_chunks:
-            grouped_by_source.setdefault(chunk["source"], []).append(chunk)
+            src = chunk.get("source")
+            if src and src not in grouped_by_source:
+                grouped_by_source[src] = [chunk]
+            elif src and chunk not in grouped_by_source[src]:
+                grouped_by_source[src].append(chunk)
 
         return {
             "chunks": expanded_chunks,
@@ -642,7 +716,7 @@ class VectorStore:
             "chunk_ids": chunk_ids,
             "status": status,
             "error": error,
-            "indexed_at": datetime.now().isoformat(),
+            "indexed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def _batch_delete(self, ids: List[str]):

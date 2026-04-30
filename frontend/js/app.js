@@ -5,9 +5,36 @@
 const API_BASE = '';
 const MAX_CHAT_LOCAL_FILES = 5;
 const MAX_CHAT_LOCAL_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_HISTORY_MESSAGES = 20; // keep parity with backend MAX_CONVERSATION_MESSAGES
+
+// HTML-escape any user/server-controlled string before embedding in innerHTML.
+// stops <script>, onerror=, onload= etc. from triggering when filenames or audit
+// fields contain attacker-controlled markup.
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // app state — conversations persist in localStorage between sessions
-let conversations = JSON.parse(localStorage.getItem('sl_convos') || '[]').map(normalizeConversation);
+function loadConversations() {
+  // tolerate corrupt localStorage (manual edits, browser bugs) without crashing the whole app
+  const raw = localStorage.getItem('sl_convos');
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeConversation);
+  } catch (e) {
+    console.error('Corrupt localStorage sl_convos — resetting', e);
+    return [];
+  }
+}
+let conversations = loadConversations();
 let activeId = null;
 let isStreaming = false;
 let currentMode = 'chat'; // 'chat' or 'evaluate'
@@ -47,6 +74,37 @@ const localAttachmentListWelcomeEl = document.getElementById('localAttachmentLis
 const localAttachmentListBottomEl = document.getElementById('localAttachmentListBottom');
 
 marked.setOptions({ breaks: true, gfm: true });
+
+// XSS hardening for marked output. marked.parse() can produce raw HTML when the
+// markdown contains inline HTML tags. Strip <script>, <iframe>, <object>, etc.
+// and remove inline event handlers (onload=, onerror=, onclick=) before insertion.
+function safeMarkdown(content) {
+  const html = marked.parse(content || '');
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  // walk every element — drop dangerous tags and any on*= attributes
+  const blocked = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'STYLE', 'BASE']);
+  const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (blocked.has(node.tagName)) {
+      toRemove.push(node);
+      continue;
+    }
+    // drop event-handler attributes and javascript: hrefs
+    for (const attr of Array.from(node.attributes || [])) {
+      const name = attr.name.toLowerCase();
+      const val = String(attr.value || '').trim().toLowerCase();
+      if (name.startsWith('on') ||
+          ((name === 'href' || name === 'src') && val.startsWith('javascript:'))) {
+        node.removeAttribute(attr.name);
+      }
+    }
+  }
+  toRemove.forEach(n => n.remove());
+  return tpl.innerHTML;
+}
 
 // -- mode toggle --
 // chat mode = ask questions about SOPs
@@ -135,15 +193,16 @@ function renderDocumentList(documents) {
   documents.forEach(doc => {
     const el = document.createElement('div');
     el.className = 'doc-item';
+    // XSS fix: escape filename and display name before embedding in innerHTML
     el.innerHTML = `
       <div class="doc-info">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" stroke="#4a4a4a" stroke-width="1" fill="none"/>
           <path d="M7 1v3h3" stroke="#4a4a4a" stroke-width="1" fill="none"/>
         </svg>
-        <span class="doc-name" title="${doc.filename}">${doc.name}</span>
+        <span class="doc-name" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.name)}</span>
       </div>
-      <button class="doc-delete" title="Remove" data-filename="${doc.filename}">
+      <button class="doc-delete" title="Remove" data-filename="${escapeHtml(doc.filename)}">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
         </svg>
@@ -158,7 +217,8 @@ function renderDocumentList(documents) {
       e.stopPropagation();
       if (!confirm(`Remove "${btn.dataset.filename}"?`)) return;
       try {
-        const res = await fetch(`${API_BASE}/api/documents/${btn.dataset.filename}`, { method: 'DELETE' });
+        // URL-encode filename so special chars (?, #, spaces) don't break the URL
+        const res = await fetch(`${API_BASE}/api/documents/${encodeURIComponent(btn.dataset.filename)}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.documents) renderDocumentList(data.documents);
       } catch (err) { console.error(err); }
@@ -247,7 +307,29 @@ chatFileInputEl.addEventListener('change', () => {
 // -- conversation management --
 // everything stored in localStorage so chats survive page refresh
 
-function save() { localStorage.setItem('sl_convos', JSON.stringify(conversations)); }
+function save() {
+  // localStorage has a ~5-10 MB quota. Catch overflow and trim oldest conversations
+  // until the payload fits. Better than silent data loss / crash.
+  try {
+    localStorage.setItem('sl_convos', JSON.stringify(conversations));
+  } catch (e) {
+    if (e && (e.name === 'QuotaExceededError' || /quota/i.test(String(e.message)))) {
+      console.warn('localStorage quota exceeded — trimming oldest conversations');
+      // drop oldest 25% and retry once
+      const dropCount = Math.max(1, Math.floor(conversations.length / 4));
+      conversations = conversations.slice(0, conversations.length - dropCount);
+      try {
+        localStorage.setItem('sl_convos', JSON.stringify(conversations));
+      } catch (e2) {
+        console.error('localStorage save failed even after trim — clearing all', e2);
+        conversations = [];
+        try { localStorage.removeItem('sl_convos'); } catch {}
+      }
+    } else {
+      console.error('localStorage save failed:', e);
+    }
+  }
+}
 function getActive() { return conversations.find(c => c.id === activeId) || null; }
 function normalizeConversation(conv) {
   return {
@@ -276,12 +358,13 @@ function removeLocalAttachmentFromActiveConversation(attachmentId) {
 function renderLocalAttachments() {
   const conv = getActive();
   const items = Array.isArray(conv?.localAttachments) ? conv.localAttachments : [];
+  // XSS fix: escape filename + id before innerHTML interpolation
   const html = items.length === 0
     ? `<span class="local-attach-empty">No chat-local files attached</span>`
     : items.map(a => `
-      <div class="local-attach-chip" title="${a.filename}">
-        <span class="local-attach-name">${a.filename}</span>
-        <button class="local-attach-remove" data-attachment-id="${a.id}" title="Remove">×</button>
+      <div class="local-attach-chip" title="${escapeHtml(a.filename)}">
+        <span class="local-attach-name">${escapeHtml(a.filename)}</span>
+        <button class="local-attach-remove" data-attachment-id="${escapeHtml(a.id)}" title="Remove">×</button>
       </div>
     `).join('');
 
@@ -447,7 +530,7 @@ function appendMessage(role, content, streaming = false) {
     dots.innerHTML = '<span></span><span></span><span></span>';
     body.appendChild(dots);
   } else {
-    body.innerHTML = marked.parse(content || '');
+    body.innerHTML = safeMarkdown(content);
   }
 
   el.appendChild(hdr);
@@ -500,7 +583,21 @@ function appendMessage(role, content, streaming = false) {
 // handles both chat and evaluate modes, streams response via SSE
 
 async function sendMessage(text) {
-  if (isStreaming || !text.trim()) return;
+  if (!text.trim()) return;
+  if (isStreaming) {
+    // give the user feedback instead of silently swallowing the click
+    chatInputEl.placeholder = 'Please wait for the current response to finish…';
+    setTimeout(() => {
+      const phs = {
+        chat: 'Ask anything...',
+        evaluate: 'Paste case data or ask about a specific policy...',
+        email: 'Describe the UW decision to draft an email for...',
+        qa: 'Paste QA indicators for review...',
+      };
+      chatInputEl.placeholder = phs[currentMode] || phs.chat;
+    }, 2000);
+    return;
+  }
   if (!activeId) newConversation();
 
   const conv = getActive();
@@ -535,23 +632,41 @@ async function sendMessage(text) {
     // pick endpoint based on mode
     let endpoint = `${API_BASE}/api/chat`;
     const localAttachments = Array.isArray(conv.localAttachments) ? conv.localAttachments.slice(0, MAX_CHAT_LOCAL_FILES) : [];
-    let payload = { messages: conv.messages, mode: currentMode, localAttachments };
+    // truncate history to last N messages so we don't ship megabytes of context every request.
+    // backend trims again to MAX_CONVERSATION_MESSAGES, but truncating client-side cuts
+    // upload bandwidth and avoids sending old privacy-laden content unnecessarily.
+    const trimmedMessages = conv.messages.slice(-MAX_HISTORY_MESSAGES);
+    let payload = { messages: trimmedMessages, mode: currentMode, localAttachments };
 
     if (currentMode === 'evaluate') {
-      let caseData = userText;
-      try { caseData = JSON.parse(userText); } catch {}
+      // evaluate mode requires a JSON object — if user typed free text, wrap it as a
+      // 'description' field so the backend doesn't get a raw string and try to .get() on it
+      let caseData;
+      try {
+        caseData = JSON.parse(userText);
+      } catch {
+        caseData = { description: userText };
+      }
       endpoint = `${API_BASE}/api/evaluate`;
-      payload = { caseData, messages: conv.messages.slice(0, -1) };
+      payload = { caseData, messages: trimmedMessages.slice(0, -1) };
     } else if (currentMode === 'email') {
       let emailData = { decision_type: 'Review Required', customer_name: '[Customer Name]', outcome_summary: userText };
-      try { emailData = JSON.parse(userText); } catch {}
+      try {
+        const parsed = JSON.parse(userText);
+        if (parsed && typeof parsed === 'object') emailData = parsed;
+      } catch {}
       endpoint = `${API_BASE}/api/generate-email`;
-      payload = { emailData, messages: conv.messages.slice(0, -1) };
+      payload = { emailData, messages: trimmedMessages.slice(0, -1) };
     } else if (currentMode === 'qa') {
-      let qaData = userText;
-      try { qaData = JSON.parse(userText); } catch {}
+      let qaData;
+      try {
+        qaData = JSON.parse(userText);
+        if (typeof qaData !== 'object' || qaData === null) qaData = { description: userText };
+      } catch {
+        qaData = { description: userText };
+      }
       endpoint = `${API_BASE}/api/qa-review`;
-      payload = { qaData, messages: conv.messages.slice(0, -1) };
+      payload = { qaData, messages: trimmedMessages.slice(0, -1) };
     }
 
     const resp = await fetch(endpoint, {
@@ -588,17 +703,17 @@ async function sendMessage(text) {
           if (parsed.text) {
             if (first) { bodyEl.innerHTML = ''; first = false; }
             fullText += parsed.text;
-            bodyEl.innerHTML = marked.parse(fullText) + '<span class="typing-cursor"></span>';
+            bodyEl.innerHTML = safeMarkdown(fullText) + '<span class="typing-cursor"></span>';
             scrollToBottom();
           }
         } catch {}
       }
     }
-    if (bodyEl) bodyEl.innerHTML = marked.parse(fullText || '*(no response)*');
+    if (bodyEl) bodyEl.innerHTML = safeMarkdown(fullText || '*(no response)*');
     if (!fullText) fullText = '*(no response)*';
   } catch (err) {
     fullText = `**Error:** ${err.message}`;
-    if (bodyEl) bodyEl.innerHTML = marked.parse(fullText);
+    if (bodyEl) bodyEl.innerHTML = safeMarkdown(fullText);
   }
 
   conv.messages.push({ role: 'assistant', content: fullText });
@@ -688,6 +803,9 @@ function draftEmailFromEval(evalData) {
     mapped = { type: 'Approval', tone: 'Supportive', summary: 'Your application has been approved.' };
   } else if (norm.includes('furtherreq') || norm === 'block' || norm === 'pending') {
     mapped = { type: 'Pending', tone: 'Reassuring', summary: 'Your application requires additional information before we can proceed.' };
+  } else if (norm.includes('referops') || norm === 'refertoops') {
+    // Refer Ops: internal admin issue (e.g. name sequence) — customer doesn't need UW context
+    mapped = { type: 'Refer Ops', tone: 'Reassuring', summary: 'Your application is undergoing internal verification. No action is required from you at this time.' };
   } else if (norm.includes('refer') || norm.includes('uw') || norm.includes('underwrit')) {
     mapped = { type: 'Postpone', tone: 'Reassuring', summary: 'Your application requires further review by our underwriting team.' };
   } else if (norm.includes('postpone')) {

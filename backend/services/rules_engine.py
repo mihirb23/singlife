@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 RULES_FILE = Path(__file__).parent.parent.parent / 'knowledge_base' / 'sop_rules.json'
 
+# rules cache — invalidate on file mtime change so SME edits to JSON are picked up
+# without restarting the server (also avoids re-reading on every evaluate call)
+_RULES_CACHE: dict = {}
+_RULES_MTIME: float = 0.0
+
 
 @dataclass
 class StepResult:
@@ -27,9 +32,18 @@ class StepResult:
 
 
 def load_rules() -> dict:
-    """load the rules config from sop_rules.json"""
+    """Load the rules config from sop_rules.json.
+    Cached by file mtime — re-reads only when the file actually changes
+    (avoids disk IO on every evaluate call)."""
+    global _RULES_CACHE, _RULES_MTIME
     try:
-        return json.loads(RULES_FILE.read_text(encoding='utf-8'))
+        current_mtime = RULES_FILE.stat().st_mtime
+        if _RULES_CACHE and current_mtime == _RULES_MTIME:
+            return _RULES_CACHE
+        rules = json.loads(RULES_FILE.read_text(encoding='utf-8'))
+        _RULES_CACHE = rules
+        _RULES_MTIME = current_mtime
+        return rules
     except Exception as e:
         logger.error(f"Failed to load rules from {RULES_FILE}: {e}")
         return {}
@@ -113,12 +127,19 @@ def execute_document_exists(c: dict, step_cfg: dict) -> StepResult:
     doc_field = step_cfg.get("document", "")
     truthy = step_cfg.get("truthy_values", [])
 
-    val = c.get(f"{doc_field}_exists") or c.get(doc_field)
+    # use sentinel so we can distinguish "missing key" from "explicit empty/0/False"
+    _missing = object()
+    val = c.get(f"{doc_field}_exists", _missing)
+    if val is _missing:
+        val = c.get(doc_field, _missing)
 
-    if val is None:
-        return StepResult(step_id, desc, "Pass",
-                          f"Document availability assumed (metadata not in case data)",
-                          confidence="Medium")
+    if val is _missing or val is None:
+        # compliance: missing field should NOT auto-pass — flag for human review
+        return StepResult(step_id, desc, "Manual Review",
+                          f"Document field '{doc_field}' missing in case data — cannot verify",
+                          confidence="Low",
+                          recommended_action=step_cfg.get("missing_recommended_action",
+                                                           "Verify document exists in FileNet"))
 
     val_str = str(val).strip().lower()
     if val_str in truthy:
@@ -239,13 +260,18 @@ def execute_client_record_found(c: dict, step_cfg: dict) -> StepResult:
 
 def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
     """rule: field_match — compares submitted fields against L400 fields.
-    field mapping comes from step config in sop_rules.json."""
+    field mapping comes from step config in sop_rules.json.
+
+    Compliance note: if a required field is missing on BOTH sides, we don't
+    silently pass — return Manual Review so an operator can verify rather than
+    let an unverifiable case slip through to STP."""
     step_id = step_cfg["_id"]
     desc = step_cfg["description"]
     fields_to_check = step_cfg.get("fields", [])
     cfg_field_map = step_cfg.get("field_mapping", {})
     mismatches = []
     matched = []
+    skipped = []  # fields we couldn't compare because data was missing
 
     for field in fields_to_check:
         fm = cfg_field_map.get(field, {})
@@ -271,6 +297,9 @@ def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
                     mismatches.append(f"Name: {full_sub} vs {c['l400_name']}")
                 elif full_sub:
                     matched.append("Name")
+                    name_checked = True
+            if not name_checked:
+                skipped.append(field)
             continue
 
         # standard field comparison — keys come from config
@@ -290,14 +319,29 @@ def execute_field_match(c: dict, step_cfg: dict) -> StepResult:
                 matched.append(field.upper())
             else:
                 mismatches.append(f"{field.upper()}: {sub_val} vs {l400_val}")
+        else:
+            skipped.append(field)
 
-    if not mismatches:
-        return StepResult(step_id, desc, "Pass",
-                          f"All fields match: {', '.join(matched)}")
-    return StepResult(step_id, desc, "Fail",
-                      f"Mismatch: {'; '.join(mismatches)}",
-                      decision_impact=step_cfg["fail_impact"],
-                      recommended_action=step_cfg.get("fail_recommended_action"))
+    if mismatches:
+        return StepResult(step_id, desc, "Fail",
+                          f"Mismatch: {'; '.join(mismatches)}",
+                          decision_impact=step_cfg["fail_impact"],
+                          recommended_action=step_cfg.get("fail_recommended_action"))
+    if skipped:
+        # all the matched ones passed, but at least one field couldn't be verified.
+        # set decision_impact = step's fail_impact so derive_decision routes it through
+        # the priority logic — otherwise Manual Review status alone is invisible to the
+        # final decision (Manual Review isn't in fail_statuses), which silently lets
+        # the case slip through to Standard.
+        return StepResult(step_id, desc, "Manual Review",
+                          f"Cannot verify {', '.join(skipped)} — field(s) missing on submission and/or L400. "
+                          f"Verified: {', '.join(matched) or 'none'}",
+                          confidence="Low",
+                          decision_impact=step_cfg["fail_impact"],
+                          recommended_action=step_cfg.get("missing_recommended_action",
+                                                          f"Verify {', '.join(skipped)} manually before STP"))
+    return StepResult(step_id, desc, "Pass",
+                      f"All fields match: {', '.join(matched)}")
 
 
 def execute_all_followups_resolved(c: dict, step_cfg: dict) -> StepResult:
@@ -463,15 +507,35 @@ def derive_decision(results: list, rules: dict) -> dict:
     if fup_step_id:
         for r in results:
             if r.step_id == fup_step_id and r.status in fail_statuses:
-                outstanding_followups = r.finding.replace("Outstanding: ", "")
+                # strip any leading "<word>:" label (e.g. "Outstanding: ") without
+                # hardcoding the exact phrase from the executor — robust to wording changes
+                finding = r.finding
+                if ":" in finding:
+                    label, _, rest = finding.partition(":")
+                    # only strip if it looks like a short label (not a real value)
+                    if len(label) < 30:
+                        finding = rest.strip()
+                outstanding_followups = finding
 
-    # check if any compliance trigger codes are in the follow-up step finding
+    # check if any compliance trigger codes are present in the follow-up step finding.
+    # use word-boundary regex so "C09 cleared" or "no C09" don't false-positive.
     compliance_codes = logic.get("compliance_trigger_codes", [])
     has_compliance_hit = False
     if fup_step_id and compliance_codes:
+        import re as _re
         for r in results:
             if r.step_id == fup_step_id and r.status in fail_statuses:
-                has_compliance_hit = any(code in r.finding for code in compliance_codes)
+                # match "C09" or "C09:O" but not "C091" or descriptive phrases
+                for code in compliance_codes:
+                    pattern = r"\b" + _re.escape(code) + r"(?::[A-Z])?\b"
+                    if _re.search(pattern, r.finding):
+                        # avoid false positive on negated phrases
+                        finding_lower = r.finding.lower()
+                        if not any(neg in finding_lower for neg in ("no " + code.lower(),
+                                                                     code.lower() + " cleared",
+                                                                     "not " + code.lower())):
+                            has_compliance_hit = True
+                            break
 
     # walk the decision priority list from config to find the matching decision
     key = "Standard"
@@ -556,8 +620,10 @@ def evaluate_case(case_data: dict) -> dict:
             rule_type = step_cfg.get("rule")
             executor = RULE_EXECUTORS.get(rule_type)
             if executor:
-                step_cfg["_id"] = step_id
-                result = executor(c, step_cfg)
+                # don't mutate the cached step_cfg dict — copy it so concurrent
+                # requests don't trample each other's "_id" attribute
+                cfg_with_id = {**step_cfg, "_id": step_id}
+                result = executor(c, cfg_with_id)
                 results.append(result)
             else:
                 logger.warning(f"No executor for rule type: {rule_type}")

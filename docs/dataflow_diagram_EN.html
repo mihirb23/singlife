@@ -479,14 +479,14 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
         <div class="good-line">Input ref is truncated / non-PII</div>
       </div>
     </div>
-    <div class="card card-accent-amber" style="margin-bottom:0">
+    <div class="card card-accent-green" style="margin-bottom:0">
       <div class="card-label">Logs</div>
       <div class="card-title">App Logs</div>
       <div class="card-sub">stdout / log file</div>
       <ul class="card-rows">
         <li>Debug output from logger.info</li>
       </ul>
-      <div class="warn-line">May contain PII from request context</div>
+      <div class="good-line">R-06 fixed — PIILogFilter masks all log output</div>
     </div>
   </div>
 
@@ -699,7 +699,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
       <li style="color:#34d399">Chat queries now masked (R-05 fixed)</li>
       <li>audit_log.jsonl — compliance trail</li>
       <li style="color:#34d399">Audit input ref: no raw PII</li>
-      <li style="color:#fbbf24">App logs may have PII</li>
+      <li style="color:#34d399">App logs masked via PIILogFilter (R-06 fixed)</li>
     </ul>
     <div class="good-line" style="margin-top:8px">ChromaDB — KB only, no PII</div>
     <div class="warn-line">.env API key in plaintext</div>
@@ -739,7 +739,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
         <tr><td>P4</td><td>Backend → ChromaDB (local)</td><td>KB embedding vectors</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span></td></tr>
         <tr><td>P5a</td><td>Backend → logs/qa_log.jsonl</td><td>Truncated Q&amp;A (q[:500]+r[:300]) — written by claude_service.py</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Controlled</span> R-05 fixed · no retention policy yet</td></tr>
         <tr><td>P5b</td><td>Backend → logs/audit_log.jsonl</td><td>Compliance audit trail — request_id, mode, decision, versions — written by audit_log.py</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span> Input ref is truncated · no raw PII</td></tr>
-        <tr><td>P6</td><td>Backend → App logs</td><td>Debug info</td><td><span class="badge badge-red">PII</span></td><td><span class="badge badge-red">P0</span> Potential leak via logger.info</td></tr>
+        <tr><td>P6</td><td>Backend → App logs</td><td>Debug info</td><td><span class="badge badge-green">Masked</span></td><td><span class="badge badge-green">Controlled</span> R-06 fixed · PIILogFilter on logging.root</td></tr>
         <tr><td>P7</td><td>Embedding → HuggingFace Hub</td><td>Model download only</td><td><span class="badge badge-green">No PII</span></td><td><span class="badge badge-green">Low</span> · offline bundling recommended</td></tr>
         <tr><td>P8</td><td>Anthropic → Backend (SSE)</td><td>AI-generated text</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Low</span></td></tr>
         <tr><td>P9</td><td>Backend → Browser (SSE)</td><td>Rendered output</td><td><span class="badge badge-amber">Masked</span></td><td><span class="badge badge-green">Low</span></td></tr>
@@ -787,7 +787,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
         <tr><td><span class="badge badge-red">R-03</span> API key in plaintext .env</td><td>Prompt Builder → Anthropic connector</td><td>Move to secrets vault (e.g. AWS Secrets Manager)</td></tr>
         <tr><td><span class="badge badge-red">R-04</span> Cross-border transfer without DPA</td><td>Zone IV — Anthropic API card</td><td>Sign DPA with Anthropic · apply ZDR if available</td></tr>
         <tr><td><span class="badge badge-green">R-05 ✓ Fixed</span> qa_log permanent with un-masked chat queries</td><td>Zone II — qa_log.jsonl card</td><td>Fixed in claude_service.py — user_msg and evaluate case_data are now masked before log_qa() · retention policy still needed</td></tr>
-        <tr><td><span class="badge badge-red">R-06</span> App logs may contain PII</td><td>Zone II — App Logs card</td><td>Add log-masking filter to logger handlers</td></tr>
+        <tr><td><span class="badge badge-green">R-06 ✓ Fixed</span> App logs may contain PII</td><td>Zone II — App Logs card</td><td>Fixed in app.py — PIILogFilter applies PrivacyFilter.sanitize_text() to all log messages and arguments via logging.root.addFilter()</td></tr>
       </tbody>
     </table>
   </div>

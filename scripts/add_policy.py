@@ -64,6 +64,15 @@ def main():
     kb_dir.mkdir(exist_ok=True)
     out_path = kb_dir / f"{out_name}.txt"
 
+    # don't silently overwrite — bump the suffix if the file already exists
+    if out_path.exists():
+        counter = 2
+        while (kb_dir / f"{out_name}_{counter}.txt").exists():
+            counter += 1
+        new_path = kb_dir / f"{out_name}_{counter}.txt"
+        print(f"  Note: '{out_path.name}' exists — saving as '{new_path.name}' instead")
+        out_path = new_path
+
     print(f"\nAdding policy to knowledge base")
     print(f"  Source : {pdf_path}")
     print(f"  Output : {out_path}\n")
@@ -75,17 +84,29 @@ def main():
         print("Try OCR (e.g. Adobe Acrobat or tesseract) first.")
         sys.exit(1)
 
+    # report a meaningful page count instead of the previous bogus formula
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(str(pdf_path))
+        page_count = len(reader.pages)
+    except Exception:
+        page_count = 'unknown'
+
     header = (
         f"# {pdf_path.stem}\n"
         f"Source file: {pdf_path.name}\n"
-        f"Pages extracted: {text.count(chr(12)) + len(text.split(chr(10) * 2))}\n\n"
+        f"Pages: {page_count}\n\n"
         f"{'─' * 80}\n\n"
     )
-    out_path.write_text(header + text, encoding='utf-8')
+    try:
+        out_path.write_text(header + text, encoding='utf-8')
+    except OSError as e:
+        sys.exit(f"\nError writing to {out_path}: {e}")
 
     print(f"  Done! {len(text):,} chars extracted")
     print(f"  Saved to: {out_path}")
-    print(f"  Restart the server to load it.\n")
+    print(f"  The running server will pick this up via incremental indexing")
+    print(f"  on its next /api/upload, restart, or any KB-changing request.\n")
 
 
 if __name__ == '__main__':

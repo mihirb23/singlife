@@ -23,8 +23,8 @@ MASK_CONFIG = {
 NAME_FIELD_KEYS = {
     "customer_name", "client_name", "name", "full_name", "surname",
     "given_name", "sub_surname", "sub_given_name", "l400_surname",
-    "l400_given_name", "curr_surname", "curr_givname", "sub_givname",
-    "cpf_holder_name", "cardholder_name",
+    "l400_given_name", "curr_surname", "curr_given_name", "curr_givname",
+    "sub_givname", "cpf_holder_name", "cardholder_name",
 }
 
 # fields that contain addresses
@@ -39,8 +39,33 @@ ADDRESS_FIELD_KEYS = {
 # regex patterns
 NRIC_PATTERN = re.compile(r'[STFG]\d{7}[A-Z]', re.IGNORECASE)
 EMAIL_PATTERN = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-PHONE_PATTERN = re.compile(r'\b[689]\d{7}\b')  # SG phone: starts with 6/8/9, 8 digits
+# SG phone — covers formatted variants: bare 8-digit (91234567), with separators
+# (9123 4567 / 9123-4567), and country-code prefixed (+65 9123 4567 / +6591234567 / 6591234567).
+# Two alternatives: country-code form drops \b because + is non-word so we anchor on +?65.
+PHONE_PATTERN = re.compile(
+    r'(?:\+?65[\s-]?[689]\d{3}[\s-]?\d{4})'
+    r'|(?:\b[689]\d{3}[\s-]?\d{4}\b)'
+)
+# credit card numbers: word-boundary'd 13-19 digits.
+# we apply Luhn check downstream to cut false positives on policy IDs / sums.
 CREDIT_CARD_PATTERN = re.compile(r'\b\d{13,19}\b')
+# date-of-birth in common SG formats (YYYY-MM-DD, YYYYMMDD, DD/MM/YYYY)
+DOB_PATTERN = re.compile(r'\b(?:19|20)\d{2}[-/]?(?:0[1-9]|1[0-2])[-/]?(?:0[1-9]|[12]\d|3[01])\b')
+
+
+def _luhn_valid(number: str) -> bool:
+    """Luhn check — used to cut credit-card false positives on long policy IDs."""
+    digits = [int(d) for d in number if d.isdigit()]
+    if len(digits) < 13:
+        return False
+    checksum = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        checksum += d
+    return checksum % 10 == 0
 
 
 class PrivacyFilter:
@@ -73,10 +98,14 @@ class PrivacyFilter:
         return masked
 
     def _mask_phone(self, phone: str) -> str:
-        """98765432 -> 987***32"""
-        if len(phone) < 8:
+        """Mask any matched phone form to a consistent 8-digit mask.
+        Strips separators/country-code so '+65 9123 4567' and '91234567'
+        both produce '912***67' — keeps audit-restore deterministic."""
+        digits = re.sub(r'\D', '', phone)
+        if len(digits) < 8:
             return phone
-        masked = f"{phone[:3]}***{phone[-2:]}"
+        local = digits[-8:]
+        masked = f"{local[:3]}***{local[-2:]}"
         self.pii_map[masked] = phone
         return masked
 
@@ -99,8 +128,13 @@ class PrivacyFilter:
         self.pii_map[placeholder] = addr
         return placeholder
 
-    def sanitize_text(self, text: str) -> str:
-        """mask PII patterns in free text (for RAG context, prompts, etc.)"""
+    def sanitize_text(self, text: str, track: bool = True) -> str:
+        """mask PII patterns in free text (for RAG context, prompts, etc.).
+
+        Args:
+            track: when False, skip the pii_map restore-tracking. Use for log
+                   filtering — logs never need PII restored, and tracking would
+                   leak memory on a long-running process."""
         if not text or not isinstance(text, str):
             return text
 
@@ -108,21 +142,32 @@ class PrivacyFilter:
 
         if MASK_CONFIG.get("nric"):
             for match in NRIC_PATTERN.findall(result):
-                result = result.replace(match, self._mask_nric(match))
+                masked = self._mask_nric(match)
+                if not track:
+                    self.pii_map.pop(masked, None)
+                result = result.replace(match, masked)
 
         if MASK_CONFIG.get("email"):
             for match in EMAIL_PATTERN.findall(result):
-                result = result.replace(match, self._mask_email(match))
+                masked = self._mask_email(match)
+                if not track:
+                    self.pii_map.pop(masked, None)
+                result = result.replace(match, masked)
 
         if MASK_CONFIG.get("phone"):
             for match in PHONE_PATTERN.findall(result):
-                result = result.replace(match, self._mask_phone(match))
+                masked = self._mask_phone(match)
+                if not track:
+                    self.pii_map.pop(masked, None)
+                result = result.replace(match, masked)
 
         if MASK_CONFIG.get("credit_card"):
-            for match in CREDIT_CARD_PATTERN.findall(result):
-                if len(match) >= 13:
+            # only mask numbers that pass Luhn — kills policy-ID / sum false positives
+            for match in set(CREDIT_CARD_PATTERN.findall(result)):
+                if len(match) >= 13 and _luhn_valid(match):
                     masked = f"{match[:4]}****{match[-4:]}"
-                    self.pii_map[masked] = match
+                    if track:
+                        self.pii_map[masked] = match
                     result = result.replace(match, masked)
 
         return result
@@ -170,12 +215,15 @@ class PrivacyFilter:
         return data
 
     def restore_pii(self, text: str) -> str:
-        """restore masked values in output text so ops staff can see originals"""
+        """restore masked values in output text so ops staff can see originals.
+        Order matters: replace longer placeholders first so [NAME_10] doesn't match
+        as a substring of [NAME_1] etc."""
         if not text:
             return text
         result = text
-        for masked, original in self.pii_map.items():
-            result = result.replace(masked, original)
+        # sort by descending length to avoid prefix-collision ([NAME_1] in [NAME_10])
+        for masked in sorted(self.pii_map.keys(), key=len, reverse=True):
+            result = result.replace(masked, self.pii_map[masked])
         return result
 
     def get_mask_log(self) -> list:

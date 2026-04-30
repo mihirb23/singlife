@@ -1,0 +1,673 @@
+REFERENCE: L400 FOLLOW-UP CODES — MASTER LIST (T5661)
+Source: L400 system table T5661 — Singlife Sprint 5 folder
+Provided by: May Yang (Singlife) — confirms full official list of all FUP codes
+Note: This is the COMPLETE master list (~600 codes) of every code defined in L400.
+      For frequency-of-occurrence data, see ref_followup_codes.txt (93 observed codes).
+
+====================================================================
+FORMAT: CODE — SHORT_DESC — LONG_DESC
+====================================================================
+
+ADMINISTRATIVE / GENERAL
+  AFD   —          — Premium Affordability
+  ASN   —          — Policy has been assigned
+  A01   —          — Options Form - ElderShield
+  A02   —          — Signature or Thumbprint
+  A03   —          — Identity card
+  A04   —          — Others
+  A21   — APP      — PF-Counter sign on amendment
+  A22   — APP      — PF-not signed/dated
+  A26   —          — Alteration to Application Form
+  A27   — Omission — Omission
+  A28   — S07      — PS-Omission-Form (non UW)
+
+AVOCATION / HOBBY (UW QUESTIONNAIRES)
+  AH1   — SOL UWQns — Avocation/Hobby
+  AH2   — SOL UWQns — Avocation/Hobby
+  AH3   — SOL UWQns — Avocation/Hobby
+  AH4   — SOL UWQns — Avocation/Hobby
+  AH5   — SOL UWQns — Avocation/Hobby
+
+ATTENDING PHYSICIAN STATEMENT (APS)
+  APS   — APS      — Concierge Case
+  AP1   —          — Medical Appointment
+  AP2   —          — Medical Appointment
+  AP3   —          — Medical Appointment
+  AP4   —          — Medical Appointment
+
+AGENT TIER
+  AT1   —          — DVM Agent Tier T1
+  AT2   —          — DVM Agent Tier T2
+  AT3   —          — DVM Agent Tier T3 (CONFIRMED CRITICAL CODE)
+
+DOCUMENTS / FORMS
+  BAL   —          — Bank Acceptance Letter
+  BCD   —          — BC/IC of Dependant Child
+  BCL   — BC/IC    — Birth Cert/IC Of Life Assured
+  BEN   — Beneficy — Beneficiary Details Follow Up
+  BNK   — Bankruptcy — Bankrupt Owner
+
+BLOOD TESTS / MEDICAL
+  BT1   —          — Blood Test 1
+  BT2   —          — Blood Test 2
+  BT3   —          — Blood Test 3
+  CXR   — CX-ray   — ME-Chest X-rays
+  ECG   — ECG      — ME-Electrocardiogram
+  ECI   — Medical  — ME-Stress Echocardiogram
+  FBS   —          — ME-Fasting Blood Sugar
+  HBA   —          — ME-Glycosylated Haemoglobin
+  HSR   —          — RP-Health Screen Report
+  JME   — JME      — ME-Juvenile Medical
+  MAR   — Med Report — ME-Medical Attendant's Rpt
+  MED   — Medical  — ME-Medical Examination
+  MEH   — Medical  — ME by Cardiologist
+  MEN   — Medical  — ME-Routine Medical Examination
+  PSA   — Medical  — ME-Blood Test - PSA
+  RME   —          — Medical Examination
+  SCG   — Stress ECG — ME-Stress ECG
+  UAB   — Medical  — ME-Abdomen Ultrasound
+  UAT   —          — ME-Uric Acid Test
+  UCO   — Medical  — ME-Urine Cotinine (non-smoker)
+  UEM   — U-FEME   — ME-Urine Exam & Microscopy
+  ZME   — Medical  — PME-Paramedical Examination
+
+PROPOSAL FOLLOW-UPS (PF) — B-SERIES
+  B1    —          — ACR-ROP not answered
+  B4    —          — PF-High Risk Occupation Qn
+  B5    —          — PF-Owner/LA not signed/dated
+  B6    —          — PF-Owner cannot be witness
+  B7    —          — PF-Inv choice differ from PI
+  B8    —          — PF-Plan/Rider differ from PI
+  B9    —          — PF-Pymt mode not ticked
+  B10   —          — PF-Client Particulars
+  B11   —          — PF-Tax Residency Declaration
+  B12   —          — PF-Beneficial Owner/PEP
+  B13   —          — PF-Plan Details
+  B14   —          — PF-Cash Benefit/Coupons Payout
+  B15   —          — PF-Authorisation by CPF Holder
+  B16   —          — PF-Premium Payment Details
+  B17   —          — PF-Source of Wealth/Fund
+  B18   —          — PF-Replacement of Policy
+  B19   —          — PF-Previous/Concurrent Policy
+  B20   —          — PF-Travel/Lifestyle Questions
+  B21   —          — PF-General Questions
+  B22   —          — PF-Signature
+  B23   —          — PF-Wrong Application Form
+  B24   —          — PF-Incomplete Application Form
+  B25   —          — PF- Missing Info in App Form
+  B26   —          — NFTF Supplementary Form
+  B27   —          — PF-Others 2
+  B45   —          — Name/NRIC details of BO
+  B46   —          — Reason for different mail add
+  B47   —          — Relationship btw Assured & BO
+  B49   —          — Document signed date > 3mths
+  B51   —          — Thumbprints not allowed
+  B52   —          — F-To submit staff disc form
+  B53   —          — Copy of Staff pass
+  B54   —          — Copy of Identity
+  B55   —          — Copy of IC/Passport of Payor
+  B57   —          — PO Box/ VBox not allowed
+  B58   —          — Alteration/Additional Info B58
+  B60   —          — Premium Payment Details
+  B61   —          — Copy of valid pass
+  B63   —          — GIRO Application
+  B64   —          — F-Incomplete NOB Form
+  B65   —          — Proof of Residential Address
+  B66   —          — Source of Wealth Form
+  B67   —          — US National Declaration
+  B70   —          — Pend FA/Client instruction
+  B71   —          — Pend BA's reply
+  B72   —          — Pend Mgmt's Decision
+  B75   —          — Pend L&C reply
+  B76   —          — GIRO - not processed
+  B78   —          — ROP - Qn answered Yes
+  B79   —          — Application Form - ElderShield
+  B81   — Bankruptcy — Official Assignee Consent
+  B90   —          — Alteration/Additional Info B90
+  B91   — Cover Page — Cover Page-Missing/Incomplete
+
+PRODUCT ILLUSTRATION (PI) — B28-B33
+  B28   —          — PI-Signature
+  B32   —          — PI-Others 2
+  B33   —          — PI-introduction pages missing
+
+FACT-FIND FORM (FFF)
+  B39   —          — FFF-Owner/LA not signed/dated
+  B40   —          — FFF-Adviser not signed/dated
+  B41   —          — FFF-Amendments
+  B42   —          — FFF-Signature
+  B43   —          — FFF-Incomplete
+  B44   —          — FFF-Others 1
+
+CLINICAL / CLAIMS — C-SERIES
+  CAN   —          — Pend cancellation letter/note
+  CA1   — Form 1   — Clinical Abstract Application
+  CA2   — Form 2   — Clinical Abstract Application
+  CA3   — Form 3   — Clinical Abstract Application
+  CCA   — DSP MLTC — DSP-Invalid Date Cross Ref No
+  CCB   — DSP MLTC — DSP-Product is MLTCP
+  CCC   — DSP MLTC — DSP-HD Form for CSL Supp.
+  CCP   — CC Pymt  — Credit Card Payment
+  CC0   —          — Proof For Address - Claims
+  CC1   —          — Proof For Address
+  CC2   —          — Irregular Signature-Signature
+  CC3   —          — Irregular Signature-Thumbprint
+  CC4   —          — Omission-Documentary Proof
+  CC5   —          — Omission of Signature
+  CC6   — DSP MLTC — Not DSP Member-NRIC not found
+  CC7   — DSP MLTC — DSP-Not the 1st MLTC or MLTCP
+  CC8   — DSP MLTC — Claim(s) under DSP
+  CC9   — DSP MLTC — DSP-Monthly Benefit > 1K
+  CDF   —          — Coupon Details Follow-up
+  CHA   —          — Child Health Booklet
+
+CRITICAL ILLNESS CLAIMS — CI-SERIES
+  CI1   — CI1      — CI Claim Approval - Open Para
+  CI2   — CI2      — CI Claim Approval - Open MPCI
+  CI3   — CI3      — CI Claim Approval - Waiver Prm
+  CI4   — CI4      — CI Claim Approval - MPCI
+  CI5   — CI5      — CI Claim Approval - Pymt Brkdn
+  CI6   — CI6      — CI Claim Approval - Outs. Doc
+  CI7   — CI7      — CI Claim Approval - Settlement
+  CI8   — CI8      — CI Claim Apprvl - Settlemnt Pt
+  CJ4   — CJ4      — CI Claim Approval - MPCI 2
+  CJ5   — CJ5      — CI Claim Approval - Pymt Brkd2
+
+CARDIOVASCULAR / CIRCULATORY (UW QUESTIONNAIRES)
+  CV1   — SOL UWQns — Cardiovascular
+  CV2   — SOL UWQns — Cardiovascular
+  CV3   — SOL UWQns — Cardiovascular
+  CV4   — SOL UWQns — Cardiovascular
+  CV5   — SOL UWQns — Cardiovascular
+
+CLIENT KNOW-YOUR-CLIENT
+  CKA   —          — Client CKA info need update
+
+COMPLIANCE / FATCA / CRS — C-SERIES
+  C01   — U.S.     — U.S. Person Declaration Form
+  C02   — W-8-BEN  — W-8 BEN Form
+  C03   — W-8 BEN-E — W-8 BEN-E Form
+  C04   — W-9      — W-9 Form
+  C05   — DPI SUPPF — DPI Fact Sheet
+  C07   — C07      — Compliance Premium Limit
+  C08   — C08      — Compliance 3rd party payor
+  C09   — C09      — Compliance GNS Rescreening (CONFIRMED CRITICAL CODE)
+  CRS   — CRS      — CRS Follow-up Code
+  CR1   — CRS      — CRS Self-Cert Individual
+  CR2   — CRS      — CRS Self-Cert Entity
+  CR3   — CRS      — CRS Self-Cert Controlling Prsn
+
+CARESHIELD / ELDERSHIELD — CSL/ESH
+  CSL   — EYA/EYB  — Basic CSL Plan Status (CONFIRMED CRITICAL CODE)
+  ESH   — ES1/ES2  — Basic ESH Plan Status
+  ESI   —          — ElderShield Cohort
+  ECS   — ZCSHRVAL — No existing CSL/ESH policy
+  CNE   — Campaign — MLTC/MLTC+ Campaign-Ineligible
+  COE   —          — Policy converted < 12 mths ago
+  CON   — CON      — Concurrent App
+  CIB   —          — Benef'ry added < 12 mths ago
+  CIO   —          — Policy Assigned < 12 mths ago
+
+GENERAL LETTER (CL) - CP/CH/CF
+  CF1   —          — CL Gen Ltr - Ftr LF Alive
+  CH1   —          — CL Gen Ltr - Hdr LF Deceased
+  CH2   —          — CL Gen Ltr - Hdr LF Alive
+  CP1   —          — CL Gen Ltr - Pay Mth Cheque
+  CP2   —          — CL Gen Ltr - Pay Mth Direct Db
+  CP3   —          — CL Gen Ltr - Pay Mth Medisave
+  CP4   —          — CL Gen Ltr - Pay Mth Paynow Gr
+  CP5   —          — CL Gen Ltr - Pay Mth Paynow Fs
+  CP6   —          — CL Gen Ltr - Payee <> Owner
+  CP7   —          — CL Gen Ltr - PayMthCheque Decd
+
+DECLINE / DIGESTIVE / DEATH
+  DAP   —          — Decln of Attending Physician
+  DG1   — SOL UWQns — Digestive
+  DG2   — SOL UWQns — Digestive
+  DG3   — SOL UWQns — Digestive
+  DG4   — SOL UWQns — Digestive
+  DG5   — SOL UWQns — Digestive
+
+DEATH CLAIMS — DH-SERIES
+  DH1   — DH1      — Dth Claim Approval - Open Para
+  DH2   — DH2      — Dth Claim Approval - Pymnt Brk
+  DH3   — DH3      — Dth Claim - Section 61(142)
+  DH4   — DH4      — Dth Claim Approval - S49M
+  DH5   — DH5      — Dth Claim Approval - S49L
+  DH6   — DH6      — Dth Claim Approval - SC73
+  DH7   — DH7      — Dth Claim Approval - Outs. Doc
+  DH8   — DH8      — Dth Claim Approval - Settlemnt
+
+HEALTH DECLARATION
+  DMQ   — DB1 HD   — HD Form for MyCoreCI Plan
+  DMR   — DB2 HD   — HD Form for Singlife Essent CI
+
+BACKDATING / EFFECTIVE
+  EBB   —          — Backdate due to birthday
+  EBD   —          — Backdate not due to cross
+
+ENDOCRINE (UW QUESTIONNAIRES)
+  EC1   — SOL UWQns — Endocrine
+  EC2   — SOL UWQns — Endocrine
+  EC3   — SOL UWQns — Endocrine
+  EC4   — SOL UWQns — Endocrine
+  EC5   — SOL UWQns — Endocrine
+  EC7   — SOL UWQns — Endocrine
+
+EMPLOYMENT / SOURCE OF FUNDS
+  EPM   — SrcOfFund — Employment/ Trade Income
+
+FINANCIAL (UW QUESTIONNAIRES)
+  FC1   — SOL UWQns — Financial
+  FC2   — SOL UWQns — Financial
+  FC3   — SOL UWQns — Financial
+  FC4   — SOL UWQns — Financial
+  FC5   — SOL UWQns — Financial
+  FI    —          — Fasting Instructions
+
+FREE-TEXT
+  FT1   — Gen. Ltr — Free text - NB Generic Letter
+  FT2   — Gen. Ltr — Free text - PS Generic Letter
+  FT3   — Gen. Ltr — Free text - PM Generic Letter
+  FT4   — Gen. Ltr — Free text - Claims Generic Ltr
+
+PREMIUM / FINANCIAL
+  F45   —          — PF-Premium differ from PI (CONFIRMED CRITICAL CODE)
+  F52   —          — CAA Incomplete Information
+  F53   —          — CAA Not signed or dated
+  F54   —          — CAA Not Witness
+  F90   — NOB      — NOB - Part 1 omitted
+  F91   — NOB      — Details of witnesses omitted
+  F92   — NOB      — NOB - Details of nominee(s)
+  F93   — NOB      — NOB - Details of trustee(s)
+
+GENERAL HEALTH (UW QUESTIONNAIRES)
+  GH1   — SOL UWQns — General Health
+  GH2   — SOL UWQns — General Health
+  GH3   — SOL UWQns — General Health
+  GH4   — SOL UWQns — General Health
+  GH5   — SOL UWQns — General Health
+
+GIRO / GLOBAL NAMING SCREENING
+  GND   —          — GIRO/CC initial + Cash Rnwl
+  GNS   —          — Global Naming Screening (CONFIRMED CRITICAL CODE)
+
+GROWTH (UW QUESTIONNAIRES)
+  GR1   — SOL UWQns — Growth
+  GR2   — SOL UWQns — Growth
+  GR3   — SOL UWQns — Growth
+  GR4   — SOL UWQns — Growth
+  GR5   — SOL UWQns — Growth
+
+INPATIENT / INCOME
+  IDS   — Not in use — InPatient Discharge Summary
+  ITA   — Income Ast — FIN-Income Tax Assessment/IR8A
+  ILCK0080 — K80 — APS Mult R of Brach Plexus Inj
+
+KIV / MEDICAL REPORTS
+  KIV   — KIV      — KIV further requirements
+
+APS K-SERIES (Specific Conditions)
+  K01   — K01      — Medical Report
+  K02   — K02      — APS TPD / TI / DI
+  K04   — K04      — APS Death
+  K05   — K05      — APS Personal Accident
+  K06   — K06      — APS Stroke/Brain Aneurysm Surg
+  K07   — K07      — APS CABG or Serious CAD
+  K08   — K08      — APS Early / Major Cancer / CIS
+  K09   — K09      — APS Heart Attack
+  K10   — K10      — APS Kidney Failure
+  K11   — K11      — APS Angioplasty
+  K12   — K12      — APS Aplastic Anaemia
+  K13   — K13      — APS End Stage Lung Disease
+  K14   — K14      — APS End Stage Liver Failure
+  K15   — K15      — APS Coma / Severe Epilepsy
+  K16   — K16      — APS Deafness
+  K17   — K17      — APS Heart Valve Surg/Endocardi
+  K18   — K18      — APS Loss of Speech
+  K19   — K19      — APS Major Burns
+  K20   — K20      — APS Major Organ Transplant
+  K21   — K21      — APS Multiple Sclerosis
+  K22   — K22      — APS Muscular Dystrophy
+  K23   — K23      — APS Parkinson's Disease
+  K24   — K24      — APS Surgery to Aorta
+  K25   — K25      — APS Alzheimer/Severe Dementia
+  K26   — K26      — APS Fulminant Hepatitis
+  K27   — K27      — APS Motor Neurone Disease
+  K28   — K28      — APS Pulmonary Hypertension
+  K29   — K29      — APS HIV
+  K30   — K30      — APS Benign Brain Tumour
+  K31   — K31      — APS Viral Encephalitis
+  K32   — K32      — APS Bacterial Meningitis
+  K33   — K33      — APS Blindness
+  K34   — K34      — APS Major Head Trauma
+  K35   — K35      — APS Paralysis
+  K37-K80 (additional condition-specific APS codes — see L400 T5661 table)
+
+LOAN / LIABILITY
+  LAG   —          — FIN-Loan Agreement
+  LIA   — Substd   — Existing Substandard Record
+  LOD   —          — Free Text Format
+  L67   — Over Pmt — Recover Excess Payment
+  L68   — Surv Decl — SD Claim-Declaration Form
+  L72   — L72      — Telegraphic Transfer Form
+  L73   — L73      — Income Docs
+  L74   — L74      — CPF Statements
+  L75   — L75      — Referral Memo
+  L76   — L76      — Advance Care Option Form
+  L99   — Other Doc — Other Claims Doc
+
+MEDICAL ATTENDANT REPORT (MAR/MA)
+  MAN   — Mandate  — Payment Details Follow Up
+  MA1   — Med Report — ME-Medical Attendant's Rpt
+  MA2   — Med Report — ME-Medical Attendant's Rpt
+  MA3   — Med Report — ME-Medical Attendant's Rpt
+  MAT   — SrcOfFund — Maturity or Surrender of polic
+  MC    —          — Marriage Certificate
+  MCP   —          — Multi Payor Refresh
+  MFC   —          — MFC Auto U/W Endorsement print
+  MGE   —          — GIO Pre-existing Condition End
+
+MENTAL HEALTH (UW QUESTIONNAIRES)
+  MH1   — SOL UWQns — Mental Health
+  MH2   — SOL UWQns — Mental Health
+  MH3   — SOL UWQns — Mental Health
+  MH4   — SOL UWQns — Mental Health
+  MH5   — SOL UWQns — Mental Health
+  MIN   — Not in use — Life Insured is a minor
+
+MUSCULOSKELETAL (UW QUESTIONNAIRES)
+  MK1   — SOL UWQns — Musculoskeletal
+  MK2   — SOL UWQns — Musculoskeletal
+  MK3   — SOL UWQns — Musculoskeletal
+  MK4   — SOL UWQns — Musculoskeletal
+  MK5   — SOL UWQns — Musculoskeletal
+
+MAR / MED REPORT (continued)
+  MRA   — Med Report — MAR by regular doctor
+  MRF   —          — Medical Request Form
+  MS1   — MS1      — PM - EIS Acc Updt Default Para
+
+MATERNITY CLAIMS — MT/MU/MV-SERIES
+  MT1   — MT1      — Maternity Claim - Open Para
+  MT2   — MT2      — Maternity Claim - Rejection
+  MT3   — MT3      — Maternity Claim - Provision
+  MU3   — MU3      — Maternity Claim - Provision 2
+  MU4   — MU4      — Maternity Claim - Provision 2
+  MV3   — MV3      — Maternity Claim - Provision 3
+
+MEDICAL REPORTS — M-SERIES (Condition-specific)
+  M01   — MAR      — Medical Rpt on General Health
+  M02   — MAR      — Medical Rpt - req. Diagnosis
+  M03   — MAR      — Medical Rpt - Fill attachmnent
+  M04   — Lab      — Laboratory Radiologist Report
+  M05   — ILQA0001 — Abnormal Pap Smear
+  M06   — ILQA0002 — Anaemia - Blood Disorder
+  M07   — ILQA0003 — Asthma
+  M08   — ILQA0004 — Back Disorder
+  M09   — ILQA0005 — Breast Disorder
+  M10   — ILQA0006 — Chest Discomfort or Pain
+  M11   — ILQA0007 — Coronary Artery Disease
+  M12   — ILQA0008 — Diabetes
+  M13   — ILQA0009 — Epilepsy
+  M14   — ILQA0010 — General (all consultations)
+  M15   — ILQA0011 — Gynaecological Disorder
+  M16   — ILQA0012 — Haematuria
+  M17   — ILQA0013 — Head Injury
+  M18   — ILQA0014 — Hearing Loss
+  M19   — ILQA0015 — Heart Disease & Disorder
+  M20   — ILQA0016 — Hepatitis B & C
+  M21   — ILQA0017 — Hypertension
+  M22   — ILQA0018 — Juvenile - Prematurity
+  M23   — ILQA0019 — Mood Disorders
+  M24   — ILQA0020 — Obstructive Sleep Apnoea
+  M25   — ILQA0021 — Systemic Lupus Erythematosus
+  M26   — ILQA0022 — Thyroid Disorder
+
+NOT-TAKEN-UP / NEW BUSINESS
+  NB1   — NB1      — Default Para Rlse Med Rpt
+  NB5   — NB5      — Default Para Chg of Pymt Freq
+  NTU   —          — Auto NTU Pending deduction
+  N17   — Not SG/SPR — PH/LA must be SG/SPR
+  N18   — PO|Mailbox — PO Box or Mailbox Address
+
+OCCUPATIONAL (UW QUESTIONNAIRES)
+  OC1   — SOL UWQns — Occupational
+  OC2   — SOL UWQns — Occupational
+  OC3   — SOL UWQns — Occupational
+  OC4   — SOL UWQns — Occupational
+  OC5   — SOL UWQns — Occupational
+  OGF   —          — Obstetrics & Gynaecology Form
+
+OTHERS (FREE-TEXT)
+  OTH   — Others   — Free text
+  OTS   — SrcOfFund — Others
+  OT2-OT9 — Others — Awaiting unspecific items
+
+PERSONAL ACCIDENT CLAIMS — PA-SERIES
+  PAA   — PAA      — PA Claim Approval - Open Para
+  PAB   — PAB      — PA Claim Approval - Pymt Break
+  PAC   —          — Pending Acceptance from Client
+  PAD-PAH —        — PA Claim Approval - Pymt Break
+  PA1   — PA1      — PA Claim Approval - Open Para
+  PA2   — PA2      — PA Claim Approval - Pymt Break
+  PA3   — PA3      — PA Claim Approval - CPF Refund
+  PA4   — PA4      — PA Claim Approval - Settlement
+  PB2   — PB2      — PA Claim Approval - Pymt Brk 2
+
+PDPA / PEP
+  PDP   —          — PDPA Follow Up
+  PEP   —          — Politically Exposed Person
+
+ESH POLICY MANAGEMENT — PD/PE/PN-SERIES
+  PD1-PD5 — PD1-PD5 — PM-ESH Life Deceased Follow-up
+  PD9   — Generic  — PM-ESH Life Deceased Follow-up
+  PE1-PE5 — PE1-PE5 — PM-ESH Life Deceased Follow-up
+  PE6   — PE6      — PM-ESH Reject After 1Nov21 P1
+  PE7   — PE7      — PM-ESH Reject After 1Nov21 P2
+  PE8   — PE8      — PM-ESH Reject After 1Nov21 P3
+  PN1-PN5 — PN1-PN5 — PM-ESH Life Non-Deceased
+
+PREMIUM FINANCING / SOURCE OF FUNDS
+  PFH   —          — Premium Financing
+  PFI   — SrcOfFund — Premium Financing
+  PRO   — SrcOfFund — Sales of property
+  SAV   — SrcOfFund — Savings
+
+SRS / FAILED DEDUCTIONS
+  PM1   — PM1      — Default Para SRS fail Deduct 1
+  PM2   — PM2      — Default Para SRS fail Deduct 2
+  PNF   —          — Pending Call Back
+  PNL   —          — FIN-Audited Company Accounts
+
+PUP / CALLBACK
+  PUP   —          — Pending Upload
+  PU1   —          — Callback Not Required
+  PU3   —          — Call Back Required
+  PU4   —          — NFTF SuppForm Req&No Call Back
+  PU5   —          — NFTF Supp Form & Call back req
+  PU6   —          — Call Back not required
+  PU7-PU8 —        — NFTF SuppForm/Call back combinations
+  PSL   — Pol Serv — PS-Req for Secondary LA Form
+  PY1   — <12 mths — Policy commenced < 12 mths ago
+
+ME PANELS
+  P1    — Panel 1  — ME-Full Blood Profile
+  P2    — Panel 2  — ME-Lipid Study
+  P3    — Panel 3  — ME-Renal Function
+  P4    — Panel 4  — ME-Thyroid Function
+  P5    — Panel 5  — ME-Liver Profile Studies
+  P6    — Panel 6  — ME-Hepatitis B (check infect)
+  P7    — Panel 7  — ME-Anaemia
+  P8    — Panel 8  — ME-HIV antibody test
+  P9-P13 — Panel 9-13 — Various ME panels including AFP, HbeAg, HbA1c
+
+UW QUESTIONNAIRES — Q-SERIES (Condition-specific)
+  QA1   — Asthma Q/A — QNN for Asthma
+  QA2   — Back Disdr — QNN for Back Disorder
+  QA3   — Chest Pain — QNN for Chest Pain
+  QA4   — Convulsion — QNN for Convulsion
+  QA5   — Epilepsy — QNN for Epilepsy
+  QA7   — Gout     — QNN for Gout
+  QA8   — Drug Abuse — QNN for Drug
+  QA9   — Gastric  — QNN for Digestive Disorder
+  QC1   —          — Further clarification required
+  QH    —          — QNN-Hepatitis/Liver Disorders
+  QII   —          — QNN Singlife Disability Income
+  QI1   —          — Questionnaire incomplete
+  QI2   —          — Questionnaire incomplete
+  QO1-QO3 —        — QNN-Other questionnaires
+  Q10   — Consen_HIV — Consent Form-HIV antibody Test
+  Q11   — Foreign R — QNN for Foreign Residents
+  Q12   — Life Style — QNN for Lifestyle
+  Q13-Q16 —        — QNN for various activities (Aviation/Diving/Motor Sport)
+  Q17-Q21 —        — QNN for Financial/Self-Employed/Partnership/Keyman/Business
+  Q22-Q23 —        — QNN for PPR / Consent Policy Register
+  Q26-Q29 —        — QNN for Climbing/Respiratory/Health Decl/Parachuting
+  Q32-Q40 —        — QNN for Headache/Hypertension/General Health/Thyroid/Occupational/Hazardous/Mental Health
+  Q41-Q51 —        — QNN for Lumps/Non-Income/Liver/Aviation/Cholesterol/Health Cnd/EmpBenefits/Loans/Sports
+  Q6B   — Diabetes_2 — QNN for Diabetes (Part II)
+  Q6I   — Diabetes_I — QNN for Diabetes (Part I)
+
+ROUTINES / MEDICAL — R-SERIES
+  RA    —          — Running Attire
+  ROC   —          — FIN-ACRA
+  ROP   —          — To trigger letter
+  RP1   — MR1      — Medical Report 1
+  RP2   — MR2      — Medical Report 2
+  RP3   — MR3      — Medical Report 3
+  RST   — Not in use — Policy revived < 12 mths ago
+
+RESPIRATORY (UW QUESTIONNAIRES)
+  RS1   — SOL UWQns — Respiratory
+  RS2   — SOL UWQns — Respiratory
+  RS3   — SOL UWQns — Respiratory
+  RS4   — SOL UWQns — Respiratory
+  RS5   — SOL UWQns — Respiratory
+
+REPLACEMENT / TERMINATION
+  R01   —          — Policy Terminated <12 mths ago
+  R02   —          — Replacing policy within Aviva
+
+ESH POLICY SERVICING — SA-SERIES
+  SA2   — Pol Serv — PS-ESH Reject After 1Nov21 P1
+  SA3   — Pol Serv — PS-ESH Reject After 1Nov21 P2
+  SA4   — Pol Serv — PS-ESH Reject After 1Nov21 P3
+
+SD CLAIM REVIEW — SC/SD/SE/SF-SERIES
+  SC1   — SC1      — SD Claim - Rvw Srvl Chk Open P
+  SC2   — SC2      — SD Claim - Rvw Srvl Chk
+  SC3   — SC3      — SD Claim - Rvw Srvl Chk - Docs
+  SD1   — SD1      — SD Claim Approval - Open Para
+  SD2   — SD2      — SD Claim Approval - Defer Prd.
+  SD3   — SD3      — SD Claim Approval - Apprvl Prd
+  SD4   — SD4      — SD Claim Approval - Lump Sum
+  SD5   — SD5      — SD Claim Approval - Lump SumDC
+  SD6   — SD6      — SD Claim Approval - Pymt Brkdn
+  SD7   — SD7      — SD Claim Approval - Outs. Doc
+  SD8   — SD8      — SD Claim Approval - Pymt & Rvw
+  SE6   — SE6      — SD Claim Approval - Pymt Brkdn
+  SE8   — SE8      — SD Claim Approval -Pymt & Rvw2
+  SF5   — ESMG     — ESH SD REJ (After MG)
+  SF6   — ESMG     — ESH SD AIC Contact (After MG)
+
+POLICY SERVICING / SS / SUPP / SU
+  SS    — Pay Slip — FIN-Salary Slip
+  SSS   —          — Singlife Secure Saver-Followup
+  SUP   — SUPPF    — Supplementary Proposal Form
+  SU1   — Pol Serv — PS-Withdrawal Universal Life
+  SU2   — Pol Serv — PS-Health Declaration Form UL
+  SXX   — Free Text — free text
+
+POLICY SERVICING — S-SERIES (extensive)
+  S01-S99 — Pol Serv — Various PS codes covering: Omissions, Form errors, Sign diffs,
+                       Witness/Trustee, Form types, Pymt requirements, Bankruptcy,
+                       Add Family/Conversion/Withdrawal/Change Addr/Declaration/HD/NOB/Loan/
+                       Assignment/Coll Assignment/Changes/ILP Alteration/FATCA/CRS/Trust/
+                       Indemnity/HPS Exemption etc.
+
+COMPLIANCE TAG / TLE / TLI
+  TAG   —          — Contact Compliance Team
+  TLI   — Tele-Inter — Tele-Interview
+  TL1   —          — TLE LIFE
+  TL2   —          — TLE TPD
+  TL3   —          — TLE LIFE & TPD
+  TPP   —          — Third party payment
+  TXT   —          — Free Text format
+
+STP / IDP / NFTF — T-SERIES
+  T01   — T01      — STP Owner is not personal
+  T02   — T02      — STP 3rd party Medisave payment
+  T03   — T03      — STP Abroad Residential Country
+  T04   — T04      — STP FileNet validation error
+  T05   — T05      — STP Email or mobile is agent's
+  T06   — T06      — STP ID Verification Failed
+  T07   — T07      — STP Non MyInfo
+  T09   — T09      — STP Not Overwrite Corr Addr
+  T10   — IDP      — IDP-ID details not match
+  T11   — IDP      — IDP-FNA details not match
+  T12   — IDP      — IDP-NFTF details not match
+  T13   — NFTF     — NFTF Offshore
+
+ME — REPEAT TESTS
+  UM2   — UM2      — ME-Two Repeat UFEME
+
+UW OUTSTANDING (free-text)
+  UWO   —          — Underwriting Others 1
+  UW2-UW9 —        — Underwriting Others 2 through 9
+
+LARGE-SUM / HIGH-NET-WORTH — V-SERIES (MPP / HNW)
+  V01-V31 — MPP    — FIN documents, Medical Profiles, Trust Cert, NRIC Authorized Sig,
+                     Board Resolution, Buy-Sell, Trust Deed, Cert of Incorporation/Good
+                     Standing/Incumbency, Director's Resolution, Authority, Aggregation Limits
+  V32-V35 — MPP    — ME Profiles A+/B+/C+ and Urine Cotinine
+
+LARGE SA / EXCESS — X-SERIES
+  X21   —          — Dread Disease Cover > $1m
+  X23   —          — SA for Juvenile > $500K
+  X25   —          — Male/Female/Illness > $30K
+  X26   —          — ADB/ADDB > $1M
+  X27   —          — Total SA > $2M
+  X28   —          — FIB Monthly > $1K
+  X29   —          — Ben Agg GIO CPW>250K
+  X30-X41 —        — Various SA aggregation limits (ET, EPPW, DCIP, MyProtector, MPCI/ECI,
+                     AFC, GIO Premium Waiver, MyCoreCI)
+  X42-X47 — CQG    — STP SIO / CI SIO / PA Cover thresholds
+  X49-X55 —        — Early CI, Care Income, ECI Waiver, ADL Waiver thresholds
+  Y30   — MLTC/Plus — Life Assured with 30 Years Old
+
+NUMERIC OUTLIERS
+  36A   —          — QNN for General Health
+  6II   — Diabetes_2 — QNN for Diabetes (Part 2)
+
+====================================================================
+USAGE NOTES FOR THE AI
+====================================================================
+
+1. CONFIRMED CRITICAL CODES (frequently referenced in SOPs):
+   - CSL : CareShield Plan Status — outstanding triggers Step 7B failure
+   - C09 : Compliance GNS Rescreening — outstanding triggers TriggerGNS decision
+   - F45 : Premium mismatch — common follow-up
+   - GNS : Global Naming Screening — compliance hit
+   - AT3 : DVM Agent Tier T3 — agent tier flag
+
+2. STATUS CODES:
+   - O = Outstanding (not yet resolved)
+   - R = Resolved
+   - Step 7B passes only when ALL follow-ups have status R
+
+3. CATEGORY GROUPS:
+   - SOL UWQns : Statement of Life - UW Questionnaires (any condition-specific UW form)
+   - APS : Attending Physician Statement (specific to a medical condition K-code)
+   - Pol Serv : Policy Servicing (post-issue changes)
+   - MPP : Multi-Payor / High Net Worth requirements
+   - DSP MLTC : Direct Sales Pre-MLTC checks
+
+4. WHEN AI IS ASKED ABOUT A SPECIFIC CODE:
+   - Look up the code here for its official L400 description
+   - For frequency-of-use, see ref_followup_codes.txt (observed in MPCI dataset)
+   - For CSL/C09/F45/AT3/GNS specifically, see ref_followup_codes_official.txt (with full SOP context)
+
+5. SCOPE NOTE:
+   This is the master list of code DEFINITIONS only.
+   Actual case routing logic lives in sop_rules.json (Step 7B + decision_priority).
