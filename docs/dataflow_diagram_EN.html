@@ -276,7 +276,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
 
 <!-- ══════════ HEADER ══════════ -->
 <div class="header">
-  <div class="status-pill"><span></span>Code Verified · v1.1 · 2026-04-28</div>
+  <div class="status-pill"><span></span>Code Verified · v1.2 · 2026-05-05</div>
   <h1 class="page-title">Singlife AI Ops — Data Flow</h1>
   <p class="page-meta">LTC QnB Underwriting Automation &nbsp;·&nbsp; PII flow tracking &nbsp;·&nbsp; NBIG CareShield</p>
   <div class="verify-bar">
@@ -372,8 +372,8 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
       <div class="card-label">Entry Point</div>
       <div class="card-title">Flask App</div>
       <div class="card-sub">app.py · 14 routes (11 /api/* + 3 pages)</div>
-      <div class="warn-line">No auth · No RBAC</div>
-      <div class="warn-line">CORS(app) wide-open · ALLOWED_ORIGINS is dead config</div>
+      <div class="good-line">Audit + Admin endpoints gated with API keys (R-01 partial)</div>
+      <div class="good-line">CORS locked via ALLOWED_ORIGINS env var · same-origin by default</div>
       <div class="mode-grid">
         <div class="mode-chip mc-ok">
           <div class="mc-name">Chat</div>
@@ -782,7 +782,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
         <tr><th>Risk</th><th>Location</th><th>Mitigation</th></tr>
       </thead>
       <tbody>
-        <tr><td><span class="badge badge-red">R-01</span> No API authentication</td><td>Zone II — Flask App header</td><td>Integrate SSO / API gateway auth</td></tr>
+        <tr><td><span class="badge badge-amber">R-01 ◐ Partial</span> API authentication</td><td>Zone II — Flask App header</td><td>Audit (X-Audit-Key) and Admin (X-Admin-Key) endpoints gated. Streaming endpoints rely on 127.0.0.1 binding + same-origin CORS. Full SSO / API gateway is enterprise-scope.</td></tr>
         <tr><td><span class="badge badge-green">R-02 ✓ Fixed</span> Chat bypasses PrivacyFilter</td><td>Zone II — Chat mode chip (red)</td><td>Fixed in claude_service.py — PrivacyFilter now applied to messages and local attachments in chat_stream before Anthropic call</td></tr>
         <tr><td><span class="badge badge-red">R-03</span> API key in plaintext .env</td><td>Prompt Builder → Anthropic connector</td><td>Move to secrets vault (e.g. AWS Secrets Manager)</td></tr>
         <tr><td><span class="badge badge-red">R-04</span> Cross-border transfer without DPA</td><td>Zone IV — Anthropic API card</td><td>Sign DPA with Anthropic · apply ZDR if available</td></tr>
