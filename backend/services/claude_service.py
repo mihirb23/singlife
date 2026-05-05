@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from services.rules_engine import evaluate_case
 from services.rag_service import VectorStore, SUPPORTED_EXTENSIONS, extract_text
 from services.privacy_filter import PrivacyFilter
+from services.llm_debug_printer import print_request as _llm_print_request, print_response as _llm_print_response
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env', override=False)
 
@@ -660,8 +661,11 @@ class InsuranceAssistant:
             system_prompt += f"\n\n{sanitized_local}"
         system_prompt += f"\n\n## RELEVANT SOP CONTEXT\n\n{rag_context}"
 
+        _started = _llm_print_request('chat', self.model, system_prompt, masked_messages)
+        full_response = ''
+        _err = None
+        _in_tokens, _out_tokens = None, None
         try:
-            full_response = ''
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -671,12 +675,21 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
+                try:
+                    _u = stream.get_final_message().usage
+                    _in_tokens, _out_tokens = _u.input_tokens, _u.output_tokens
+                except Exception:
+                    pass  # token capture is best-effort
 
             log_qa(pf.sanitize_text(user_msg), full_response, mode, retrieval_meta=retrieval_payload)
 
         except Exception as e:
+            _err = str(e)
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error communicating with Claude API:** {str(e)}"
+        finally:
+            _llm_print_response('chat', _started, char_count=len(full_response),
+                                input_tokens=_in_tokens, output_tokens=_out_tokens, error=_err)
 
     def evaluate_stream(self, case_data, messages: list) -> Iterator[str]:
         """evaluate mode — runs rules engine first, then claude explains the results.
@@ -755,8 +768,11 @@ class InsuranceAssistant:
             )
             eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': eval_prompt}]
 
+        _started = _llm_print_request('evaluate', self.model, system_prompt, eval_messages)
+        full_response = ''
+        _err = None
+        _in_tokens, _out_tokens = None, None
         try:
-            full_response = ''
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -766,14 +782,23 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
+                try:
+                    _u = stream.get_final_message().usage
+                    _in_tokens, _out_tokens = _u.input_tokens, _u.output_tokens
+                except Exception:
+                    pass
 
             # reuse the already-populated `pf` so its mask log is consistent across this request
             user_msg = str(pf.sanitize_for_llm(case_data))[:500]
             log_qa(user_msg, full_response, 'evaluate', retrieval_meta=retrieval_payload)
 
         except Exception as e:
+            _err = str(e)
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error communicating with Claude API:** {str(e)}"
+        finally:
+            _llm_print_response('evaluate', _started, char_count=len(full_response),
+                                input_tokens=_in_tokens, output_tokens=_out_tokens, error=_err)
 
     def email_draft_stream(self, email_data: dict, messages: list) -> Iterator[str]:
         """Use Case 2: generate empathetic customer email for UW decisions.
@@ -842,8 +867,11 @@ class InsuranceAssistant:
 
         eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': user_prompt}]
 
+        _started = _llm_print_request('email', self.model, email_system, eval_messages)
+        full_response = ''
+        _err = None
+        _in_tokens, _out_tokens = None, None
         try:
-            full_response = ''
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -853,10 +881,19 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
+                try:
+                    _u = stream.get_final_message().usage
+                    _in_tokens, _out_tokens = _u.input_tokens, _u.output_tokens
+                except Exception:
+                    pass
             log_qa(f"email_draft:{decision_type}", full_response, 'email', retrieval_meta=retrieval_payload)
         except Exception as e:
+            _err = str(e)
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error:** {str(e)}"
+        finally:
+            _llm_print_response('email', _started, char_count=len(full_response),
+                                input_tokens=_in_tokens, output_tokens=_out_tokens, error=_err)
 
     def _load_qa_scoring_config(self) -> dict:
         """load QA scoring rules from qa_scoring_rules.json"""
@@ -1030,8 +1067,11 @@ class InsuranceAssistant:
 
         eval_messages = _trim_messages(messages) + [{'role': 'user', 'content': user_prompt}]
 
+        _started = _llm_print_request('qa_review', self.model, qa_system, eval_messages)
+        full_response = ''
+        _err = None
+        _in_tokens, _out_tokens = None, None
         try:
-            full_response = ''
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -1041,6 +1081,11 @@ class InsuranceAssistant:
                 for text in stream.text_stream:
                     full_response += text
                     yield text
+                try:
+                    _u = stream.get_final_message().usage
+                    _in_tokens, _out_tokens = _u.input_tokens, _u.output_tokens
+                except Exception:
+                    pass
             log_qa(
                 f"qa_review:{qa_data.get('case_id', 'unknown')}",
                 full_response,
@@ -1048,8 +1093,12 @@ class InsuranceAssistant:
                 retrieval_meta=retrieval_payload,
             )
         except Exception as e:
+            _err = str(e)
             logger.error(f"Claude API error: {e}")
             yield f"\n\n**Error:** {str(e)}"
+        finally:
+            _llm_print_response('qa_review', _started, char_count=len(full_response),
+                                input_tokens=_in_tokens, output_tokens=_out_tokens, error=_err)
 
     def get_qa_logs(self, limit: int = 50) -> List[Dict]:
         """Read the jsonl log and return last N entries.
